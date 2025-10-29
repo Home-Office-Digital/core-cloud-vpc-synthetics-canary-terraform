@@ -1,5 +1,5 @@
-name_prefix        = "testc"
-bucket_name        = "canary-artifacts-bucket2"
+name_prefix        = "testcy"
+bucket_name        = "canary-artifacts-buckettest"
 environment        = "NetworkTest2"
 vpc_id             = "vpc-0c6304138b1a3a4de"
 subnet_ids         = ["subnet-067fb0af2f3949340"]
