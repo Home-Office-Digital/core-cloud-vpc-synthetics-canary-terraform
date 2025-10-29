@@ -1,5 +1,5 @@
 provider "aws" {
-  region = "eu-west-2"
+  region = var.region
 }
 
 resource "aws_s3_bucket" "canary_bucket" {
@@ -20,7 +20,10 @@ resource "aws_iam_role" "canary_role" {
     Statement = [{
       Effect = "Allow",
       Principal = {
-        Service = "synthetics.amazonaws.com"
+        Service = [
+          "lambda.amazonaws.com",
+          "synthetics.amazonaws.com"
+        ]
       },
       Action = "sts:AssumeRole"
     }]
@@ -37,6 +40,33 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "canary_vpc_policy" {
+  name = "${var.environment}-canary-vpc-policy"
+  role = aws_iam_role.canary_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_s3_object" "canary_script" {
+  bucket = aws_s3_bucket.canary_bucket.bucket
+  key    = "scripts/connectivity_check.py.zip"
+  source = "${path.module}/scripts/connectivity_check.py.zip"
+  etag   = filemd5("${path.module}/scripts/connectivity_check.py.zip")
+}
+
 resource "aws_synthetics_canary" "vpc_connectivity" {
   name                 = "${lower(var.environment)}-vpc-connectivity"
   artifact_s3_location = "s3://${aws_s3_bucket.canary_bucket.bucket}/"
@@ -44,14 +74,14 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
   runtime_version      = "syn-python-selenium-7.0"
   start_canary         = true
   handler              = "canary_script.handler"
-  zip_file             = filebase64("${path.module}/scripts/connectivity_check.py.zip")
+  s3_bucket            = aws_s3_bucket.canary_bucket.bucket
+  s3_key               = aws_s3_object.canary_script.key
 
   schedule {
     expression = "rate(5 minutes)"
   }
 
   vpc_config {
-    // vpc_id             = var.vpc_id
     subnet_ids         = var.subnet_ids
     security_group_ids = var.security_group_ids
   }

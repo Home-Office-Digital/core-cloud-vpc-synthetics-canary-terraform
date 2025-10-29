@@ -1,0 +1,26 @@
+name: Validate Terraform with Trivy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  RunTerraformValidation:
+    name: Run Terraform SAST
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone the Repository
+        uses: actions/checkout@v4
+
+      # Results have to be a table as the organisation does not have Advanced Security license.
+      - name: Terraform Trivy Scan
+        uses: aquasecurity/trivy-action@0.19.0
+        with:
+          scan-type: 'config'
+          exit-code: '1'
