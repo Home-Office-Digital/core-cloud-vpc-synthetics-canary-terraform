@@ -1,0 +1,9 @@
+name_prefix        = "test1"
+bucket_name        = "canary-artifacts-bucket1"
+environment        = "NetworkTest1"
+vpc_id             = "vpc-0c6304138b1a3a4de"
+subnet_ids         = ["subnet-067fb0af2f3949340"]
+security_group_ids = ["sg-03bc57dec5969ed9a"]
+target_ips         = ["10.252.34.44"]
+allowed_ports      = [443]
+denied_ports       = [22, 25]
