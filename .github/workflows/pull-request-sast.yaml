@@ -1,12 +1,11 @@
 name: Validate Terraform with Trivy
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+ pull_request:
     types:
       - opened
+    branches:
+      - main
 
 permissions:
   contents: read
