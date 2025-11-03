@@ -11,6 +11,24 @@ resource "aws_s3_bucket" "canary_bucket" {
     Environment = var.environment
   }
 }
+resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "canary_bucket_encryption" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
 
 resource "aws_iam_role" "canary_role" {
   name = "${var.environment}-canary-role"
@@ -85,9 +103,9 @@ resource "aws_iam_role_policy" "canary_s3_access" {
 
 resource "aws_s3_object" "canary_script" {
   bucket = aws_s3_bucket.canary_bucket.bucket
-  key    = "scripts/connectivity_check.py.zip"
-  source = "${path.module}/scripts/connectivity_check.py.zip"
-  etag   = filemd5("${path.module}/scripts/connectivity_check.py.zip")
+  key    = "connectivity_check.py.zip"
+  source = "${path.module}/connectivity_check.py.zip"
+  etag   = filemd5("${path.module}/connectivity_check.py.zip")
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {
