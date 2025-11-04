@@ -37,15 +37,18 @@ Inside the `variables.tf` or in `*.tfvars` file, you should define values for th
 In your main Terraform configuration file (e.g., main.tf), you can use the module. Specify the source of the module, and version, For Example
 
 ```hcl
-module "synthetic-monitoring" {
-  source            = "sourcefuse/arc-synthetic-monitoring/aws"
-  version           = "0.0.1"
-  sns_topic_name    = var.sns_topic_name
-  endpoint          = var.endpoint
-  kms_key_alias     = var.kms_key_alias
-  canaries_with_vpc = local.canaries_with_vpc
-  bucket_name       = var.bucket_name
-  tags              = module.tags.tags
+module "vpc_connectivity_canary" {
+  source = "./modules/canary"
+
+  region             = var.region
+  bucket_name        = "vpc-connectivity-canary-bucket"
+  environment        = "dev"
+  subnet_ids         = var.subnet_ids
+  security_group_ids = var.security_group_ids
+
+  target_ips         = var.target_ips
+  allowed_ports      = var.allowed_ports
+  denied_ports       = var.denied_ports
 }
 ```
 
