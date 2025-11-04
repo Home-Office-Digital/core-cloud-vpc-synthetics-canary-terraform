@@ -1,123 +1,81 @@
 VPC Connectivity Terraform Module
-This Terraform module deploys EC2 instances in one or more destination VPCs and a CloudWatch Synthetics canary in a source VPC to test connectivity. It supports tagging for environment tracking and SNS notifications for canary failures.
+This Terraform module deploys CloudWatch Synthetics canary in a source VPC to test connectivity.
 
 🚀 Features
 
-Deploys EC2 instances in multiple destination VPCs
-Deploys a CloudWatch Synthetics canary in a source VPC
-Canary tests connectivity to destination EC2 instances using private IPs
-Supports allowed and denied port scanning
-Tags all resources with environment metadata
-Creates a CloudWatch alarm for canary failures
-Sends notifications via SNS when failures occur
+- Deploys a CloudWatch Synthetics canary in a source VPC
+- Canary tests connectivity to destination EC2 instances using private IPs
+- Supports allowed and denied port scanning
 
+### Prerequisites
+Before using this module, ensure you have the following:
 
-🔧 Inputs
+- AWS credentials configured.
+- Terraform installed.
+- A working knowledge of Terraform.
 
+## Getting Started
 
+1. **Define the Module**
 
+Initially, it's essential to define a Terraform module, which is organized as a distinct directory encompassing Terraform configuration files. Within this module directory, input variables and output values must be defined in the variables.tf and outputs.tf files, respectively. The following illustrates an example directory structure:
 
 
+```plaintext
+synthetics/
+|-- main.tf
+|-- variables.tf
+|-- outputs.tf
+```
 
 
+2. **Define Input Variables**
 
+Inside the `variables.tf` or in `*.tfvars` file, you should define values for the variables that the module requires.
 
+3. **Use the Module in Your Main Configuration**
+In your main Terraform configuration file (e.g., main.tf), you can use the module. Specify the source of the module, and version, For Example
 
+```hcl
+module "vpc_connectivity_canary" {
+  source = "./modules/canary"
 
+  region             = var.region
+  bucket_name        = "vpc-connectivity-canary-bucket"
+  environment        = "dev"
+  subnet_ids         = var.subnet_ids
+  security_group_ids = var.security_group_ids
 
+  target_ips         = var.target_ips
+  allowed_ports      = var.allowed_ports
+  denied_ports       = var.denied_ports
+}
+```
 
+4. **Output Values**
 
+Inside the `outputs.tf` file of the module, you can define output values that can be referenced in the main configuration. For example:
 
+```hcl
+output "canary_role_arn" {
+  value = aws_iam_role.canary_role.arn
+}
+```
 
+## Usage
 
+```hcl
+module "vpc_connectivity_canary" {
+  source = "./modules/canary"
 
+  region            = "eu-west-2"
+  bucket_name       = "vpc-connectivity-canary-bucket"
+  environment       = "dev"
+  subnet_ids        = ["subnet-0123456789abcdef0"]
+  security_group_ids = ["sg-0123456789abcdef0"]
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-NameDescriptionTypeRequiredsource_vpc_idVPC ID where the canary is deployedstring✅source_subnet_idSubnet ID in the source VPC for the canarystring✅destination_vpcsList of destination VPCs with subnet IDslist(object)✅ami_idAMI ID for EC2 instancesstring✅instance_typeEC2 instance typestring✅allowed_portsComma-separated list of allowed portsstring✅denied_portsComma-separated list of denied portsstring✅environmentEnvironment tag value (e.g., dev, prod)string✅sns_topic_arnARN of the SNS topic for alarm notificationsstring✅artifact_s3_locationS3 path for canary artifactsstring✅code_s3_bucketS3 bucket containing the canary script ZIPstring✅code_s3_keyS3 key for the canary script ZIPstring✅
-
-📤 Outputs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-NameDescriptioncanary_nameName of the deployed canarycanary_role_arnARN of the IAM role used by the canarydestination_instance_idsList of EC2 instance IDs in destination VPCs
+  target_ips        = ["10.0.1.10", "10.0.2.20"]
+  allowed_ports     = ["443", "80"]
+  denied_ports      = ["22", "3306"]
+}
+```

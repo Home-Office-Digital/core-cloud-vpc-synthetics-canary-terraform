@@ -11,6 +11,24 @@ resource "aws_s3_bucket" "canary_bucket" {
     Environment = var.environment
   }
 }
+resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "canary_bucket_encryption" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
 
 resource "aws_iam_role" "canary_role" {
   name = "${var.environment}-canary-role"
@@ -20,7 +38,10 @@ resource "aws_iam_role" "canary_role" {
     Statement = [{
       Effect = "Allow",
       Principal = {
-        Service = "synthetics.amazonaws.com"
+        Service = [
+          "lambda.amazonaws.com",
+          "synthetics.amazonaws.com"
+        ]
       },
       Action = "sts:AssumeRole"
     }]
@@ -37,29 +58,83 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy" "canary_vpc_policy" {
+  name = "${var.environment}-canary-vpc-policy"
+  role = aws_iam_role.canary_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ec2:CreateNetworkInterface",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DeleteNetworkInterface"
+        ],
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "canary_s3_access" {
+  name = "${var.environment}-canary-s3-access"
+  role = aws_iam_role.canary_role.name
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "s3:PutObject",
+          "s3:GetBucketLocation",
+          "s3:ListBucket"
+        ],
+        Resource = [
+          "arn:aws:s3:::${aws_s3_bucket.canary_bucket.bucket}",
+          "arn:aws:s3:::${aws_s3_bucket.canary_bucket.bucket}/*"
+        ]
+      }
+    ]
+  })
+}
+
+resource "aws_s3_object" "canary_script" {
+  bucket = aws_s3_bucket.canary_bucket.bucket
+  key    = "connectivity_check.py.zip"
+  source = "${path.module}/connectivity_check.py.zip"
+  etag   = filemd5("${path.module}/connectivity_check.py.zip")
+}
+
 resource "aws_synthetics_canary" "vpc_connectivity" {
-  name                 = "${var.environment}-vpc-connectivity-canary"
+  name                 = "${lower(var.environment)}-vpc-connectivity"
   artifact_s3_location = "s3://${aws_s3_bucket.canary_bucket.bucket}/"
   execution_role_arn   = aws_iam_role.canary_role.arn
-  runtime_version      = "syn-python-selenium-1.0"
+  runtime_version      = "syn-python-selenium-7.0"
   start_canary         = true
-  handler              = "canary_script.handler"
-  zip_file             = filebase64("${path.module}/scripts/canary_script.zip")
+  handler              = "connectivity_check.handler"
+  s3_bucket            = aws_s3_bucket.canary_bucket.bucket
+  s3_key               = aws_s3_object.canary_script.key
 
   schedule {
     expression = "rate(5 minutes)"
   }
 
   vpc_config {
-    vpc_id              = var.vpc_id
-    subnet_ids          = var.subnet_ids
-    security_group_ids  = var.security_group_ids
+    subnet_ids         = var.subnet_ids
+    security_group_ids = var.security_group_ids
   }
 
-  environment_variables = {
-    TARGET_IPS    = join(",", var.target_ips)
-    ALLOWED_PORTS = join(",", var.allowed_ports)
-    DENIED_PORTS  = join(",", var.denied_ports)
+  run_config {
+    environment_variables = {
+
+      TARGET_IPS    = join(",", var.target_ips)
+      ALLOWED_PORTS = join(",", var.allowed_ports)
+      DENIED_PORTS  = join(",", var.denied_ports)
+
+    }
   }
 
   tags = {
