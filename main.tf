@@ -2,6 +2,10 @@ provider "aws" {
   region = var.region
 }
 
+terraform {
+  backend "s3" {}
+}
+
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
