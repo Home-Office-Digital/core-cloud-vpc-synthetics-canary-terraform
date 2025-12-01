@@ -1,4 +1,4 @@
-name: SAST Scans
+name: Run Terraform SAST
 
 on:
   workflow_call:
