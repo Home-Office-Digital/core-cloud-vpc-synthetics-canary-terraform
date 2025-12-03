@@ -27,6 +27,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      # Install Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.5.7
+      - name: Checkout code
+        uses: actions/checkout@v4
       - name: Terraform Init
         run: terraform init || true
       - name: Terraform Validate
