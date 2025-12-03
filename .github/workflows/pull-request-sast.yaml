@@ -1,4 +1,4 @@
-name: Run Terraform SAST
+name: SAST Scans
 
 on:
   workflow_call:
@@ -21,6 +21,16 @@ permissions:
   security-events: write
 
 jobs:
+  terraform-sast:
+    name: Run Terraform SAST
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Terraform Init
+        run: terraform init || true
+      - name: Terraform Validate
+        run: terraform validate || true
   checkov-scan:
     uses: UKHomeOffice/core-cloud-workflow-checkov-sast-scan/.github/workflows/checkov-scan-tfplan.yaml@1.7.1
     with:
