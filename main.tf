@@ -1,6 +1,6 @@
-terraform {
+/*terraform {
   backend "s3" {}
-}
+} */
 
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
@@ -71,7 +71,7 @@ resource "aws_iam_role_policy" "canary_vpc_policy" {
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface",
-          "cloudwatch:PutMetricData" 
+          "cloudwatch:PutMetricData"
         ],
         Resource = "*"
       }
@@ -131,9 +131,9 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
   run_config {
     environment_variables = {
 
-      DEST_IP     = join(",", var.target_ips)
-      ALLOW_PORTS = join(",", var.allowed_ports)
-      DENY_PORTS  = join(",", var.denied_ports)
+      DEST_IP            = join(",", var.target_ips)
+      ALLOW_PORTS        = join(",", var.allowed_ports)
+      DENY_PORTS         = join(",", var.denied_ports)
       CONNECT_TIMEOUT_MS = "3000"
     }
   }

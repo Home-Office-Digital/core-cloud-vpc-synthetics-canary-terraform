@@ -47,3 +47,16 @@ variable "denied_ports" {
   description = "Comma-separated list of denied ports"
   type        = list(string)
 }
+
+variable "slack_webhook_url" {
+  type        = string
+  default     = ""
+  sensitive   = true
+  description = "Slack webhook URL (use slack_secret_arn instead for production)"
+}
+
+variable "slack_secret_arn" {
+  type        = string
+  default     = ""
+  description = "Secrets Manager ARN that stores Slack webhook"
+}
