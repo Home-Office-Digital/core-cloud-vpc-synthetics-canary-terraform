@@ -1,36 +1,62 @@
 import os
 import json
-import boto3
 import urllib.request
+import logging
 
-def get_webhook(secret_arn):
-    sm = boto3.client("secretsmanager")
-    resp = sm.get_secret_value(SecretId=secret_arn)
-    if "SecretString" in resp:
-        try:
-            data = json.loads(resp["SecretString"])
-            return data.get("webhook", resp["SecretString"])
-        except:
-            return resp["SecretString"]
-    return None
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
-def send_slack(webhook, text):
-    body = json.dumps({"text": text}).encode("utf-8")
-    req = urllib.request.Request(
-        webhook,
-        data=body,
-        headers={"Content-Type": "application/json"}
+def send_slack(webhook: str, text: str):
+    """Send Slack message with error handling."""
+    try:
+        body = json.dumps({"text": text}).encode("utf-8")
+        req = urllib.request.Request(
+            webhook,
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(req, timeout=5)
+    except Exception as e:
+        logger.error(f"Slack send failed: {e}")
+
+
+def extract_canary_message(event: dict) -> str:
+    """Extract SNS > Canary message safely."""
+    try:
+        sns = event["Records"][0]["Sns"]
+        return sns.get("Message", "")
+    except Exception as e:
+        logger.warning(f"Unexpected SNS event format: {e}")
+        return json.dumps(event, indent=2)
+
+
+def format_slack_message(raw: str) -> str:
+    """Readable Slack alert message."""
+    return (
+        ":rotating_light: *CANARY FAILURE DETECTED*\n"
+        "> A CloudWatch Synthetics Canary has failed.\n\n"
+        "*Details:*\n```json\n"
+        f"{raw}\n```"
     )
-    urllib.request.urlopen(req)
+
 
 def lambda_handler(event, context):
-    secret_arn = os.environ.get("SLACK_SECRET_ARN")
-    webhook = get_webhook(secret_arn) if secret_arn else os.environ.get("SLACK_WEBHOOK_URL")
+    logger.info("Event received for Canary failure alert")
 
-    sns = event["Records"][0]["Sns"]
-    message = sns["Message"]
+    webhook = os.environ.get("SLACK_WEBHOOK_URL")
 
-    text = f":rotating_light: *CANARY FAILED*\n```\n{message}\n```"
-    send_slack(webhook, text)
+    if not webhook:
+        logger.error("Missing SLACK_WEBHOOK_URL env variable")
+        return {"status": "error", "reason": "missing webhook"}
+
+    # Extract message from SNS
+    raw = extract_canary_message(event)
+
+    # Format message for Slack
+    slack_msg = format_slack_message(raw)
+
+    # Send
+    send_slack(webhook, slack_msg)
 
     return {"status": "ok"}
