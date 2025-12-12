@@ -1,7 +1,12 @@
 
 # SNS Topic for Canary Alerts
 resource "aws_sns_topic" "canary_alerts" {
-  name = "${var.environment}-canary-alerts"
+  name              = "${var.environment}-canary-alerts"
+  kms_master_key_id = "alias/aws/sns" # Enable SSE with AWS-managed KMS key for SNS
+  tags = {
+    Environment = var.environment
+  }
+
 }
 
 
