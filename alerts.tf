@@ -1,13 +1,70 @@
 
-# SNS Topic for Canary Alerts
-resource "aws_sns_topic" "canary_alerts" {
-  name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = "alias/aws/sns" # Enable SSE with AWS-managed KMS key for SNS
+# SNS Topic: Canary Alerts (encrypted with CMK)
+
+data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
+
+# Customer-managed KMS key for SNS topic encryption
+resource "aws_kms_key" "sns_canary_cmk" {
+  description             = "CMK for encrypting SNS topic: ${var.environment}-canary-alerts"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  # Key policy: account admin control + allow SNS service for just this topic
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowAccountAdminsFullControl"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "AllowSNSToUseKeyForThisTopic"
+        Effect    = "Allow"
+        Principal = { Service = "sns.amazonaws.com" }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+          ArnLike = {
+            "aws:SourceArn" = "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.environment}-canary-alerts"
+          }
+        }
+      }
+    ]
+  })
+
   tags = {
     Environment = var.environment
+    ManagedBy   = "terraform"
   }
-
 }
+
+# Friendly alias for the CMK
+resource "aws_kms_alias" "sns_canary_alias" {
+  name          = "alias/${var.environment}-sns-canary"
+  target_key_id = aws_kms_key.sns_canary_cmk.key_id
+}
+
+# SNS Topic (encrypted with CMK)
+resource "aws_sns_topic" "canary_alerts" {
+  name              = "${var.environment}-canary-alerts"
+  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
+  tags = {
+    Environment = var.environment
+    ManagedBy   = "terraform"
+  }
+}
+
 
 
 # Lambda IAM Role
