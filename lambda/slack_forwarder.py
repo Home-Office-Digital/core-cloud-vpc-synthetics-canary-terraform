@@ -238,9 +238,8 @@ def format_slack_message(raw: str, ctx: dict) -> dict:
 
     return {"text": "CloudWatch Canary Alert", "blocks": blocks}
 
-# -------------------------------
 # Lambda entrypoint
-# -------------------------------
+
 def lambda_handler(event, context):
     logger.info("Event received for Canary failure alert")
 
