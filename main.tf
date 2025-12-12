@@ -131,10 +131,13 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
   run_config {
     environment_variables = {
 
-      DEST_IP            = join(",", var.target_ips)
-      ALLOW_PORTS        = join(",", var.allowed_ports)
-      DENY_PORTS         = join(",", var.denied_ports)
-      CONNECT_TIMEOUT_MS = "3000"
+      DEST_IP             = join(",", var.target_ips)
+      ALLOW_PORTS         = join(",", var.allowed_ports)
+      DENY_PORTS          = join(",", var.denied_ports)
+      SCAN_START          = var.start_scan
+      SCAN_END            = var.scan_end
+      ALERT_ON_OPEN_PORTS = var.alert_on_open_ports
+      CONNECT_TIMEOUT_MS  = "3000"
     }
   }
 

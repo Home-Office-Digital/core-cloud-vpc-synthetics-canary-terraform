@@ -48,6 +48,20 @@ variable "denied_ports" {
   type        = list(string)
 }
 
+variable "start_scan" {
+  description = "port numbers to start scanning from"
+  type        = string
+}
+
+variable "scan_end" {
+  description = "port numbers to stop scanning"
+  type        = string
+}
+
+variable "alert_on_open_ports" {
+  description = "alert_on_open_ports"
+  type        = bool
+}
 variable "slack_webhook_url" {
   type        = string
   default     = ""
