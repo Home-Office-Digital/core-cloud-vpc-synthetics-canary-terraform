@@ -59,9 +59,23 @@ resource "aws_kms_alias" "sns_canary_alias" {
 resource "aws_sns_topic" "canary_alerts" {
   name              = "${var.environment}-canary-alerts"
   kms_master_key_id = aws_kms_alias.sns_canary_alias.name
+
+  # Access policy: allow CloudWatch to publish
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid       = "Allow_Publish_From_CloudWatch_Alarms",
+        Effect    = "Allow",
+        Principal = { Service = "cloudwatch.amazonaws.com" },
+        Action    = "sns:Publish",
+        Resource  = "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.environment}-canary-alerts",
+      }
+    ]
+  })
+
   tags = {
     Environment = var.environment
-    ManagedBy   = "terraform"
   }
 }
 
