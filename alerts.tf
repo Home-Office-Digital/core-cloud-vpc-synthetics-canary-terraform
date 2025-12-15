@@ -1,42 +1,87 @@
-
-# SNS Topic: Canary Alerts (encrypted with CMK)
-
+# Data sources
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Customer-managed KMS key for SNS topic encryption
 resource "aws_kms_key" "sns_canary_cmk" {
   description             = "CMK for encrypting SNS topic: ${var.environment}-canary-alerts"
   enable_key_rotation     = true
   deletion_window_in_days = 30
 
-  # Key policy: account admin control + allow SNS service for just this topic
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # Account root admin
+      {
+        Sid    = "AllowAccountAdminsFullControl"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+
+      # CloudWatch Alarms (required)
+      {
+        Sid    = "AllowCloudWatchToUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      },
+
+      # SNS service (required)
+      {
+        Sid    = "AllowSNSToUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "sns.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# KMS Alias
+resource "aws_kms_alias" "sns_canary_alias" {
+  name          = "alias/${var.environment}-sns-canary"
+  target_key_id = aws_kms_key.sns_canary_cmk.key_id
+}
+
+# SNS Topic (encrypted)
+resource "aws_sns_topic" "canary_alerts" {
+  name              = "${var.environment}-canary-alerts"
+  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowAccountAdminsFullControl"
-        Effect    = "Allow"
-        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
-        Action    = "kms:*"
-        Resource  = "*"
-      },
-      {
-        Sid       = "AllowSNSToUseKeyForThisTopic"
-        Effect    = "Allow"
-        Principal = { Service = "sns.amazonaws.com" }
-        Action = [
-          "kms:Decrypt",
-          "kms:GenerateDataKey",
-          "kms:GenerateDataKeyWithoutPlaintext"
-        ]
-        Resource = "*"
+        Sid    = "AllowPublishFromCloudWatchAlarms"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = "arn:aws:sns:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:${var.environment}-canary-alerts"
         Condition = {
           StringEquals = {
-            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-          ArnLike = {
-            "aws:SourceArn" = "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.environment}-canary-alerts"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
           }
         }
       }
@@ -45,41 +90,8 @@ resource "aws_kms_key" "sns_canary_cmk" {
 
   tags = {
     Environment = var.environment
-    ManagedBy   = "terraform"
   }
 }
-
-# Friendly alias for the CMK
-resource "aws_kms_alias" "sns_canary_alias" {
-  name          = "alias/${var.environment}-sns-canary"
-  target_key_id = aws_kms_key.sns_canary_cmk.key_id
-}
-
-# SNS Topic (encrypted with CMK)
-resource "aws_sns_topic" "canary_alerts" {
-  name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
-
-  # Access policy: allow CloudWatch to publish
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Sid       = "Allow_Publish_From_CloudWatch_Alarms",
-        Effect    = "Allow",
-        Principal = { Service = "cloudwatch.amazonaws.com" },
-        Action    = "sns:Publish",
-        Resource  = "arn:aws:sns:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:${var.environment}-canary-alerts",
-      }
-    ]
-  })
-
-  tags = {
-    Environment = var.environment
-  }
-}
-
-
 
 # Lambda IAM Role
 resource "aws_iam_role" "slack_lambda_role" {
@@ -100,8 +112,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
-
-# Secrets Manager Access 
+# Secrets Manager access 
 resource "aws_iam_role_policy" "slack_secret_policy" {
   count = var.slack_secret_arn != "" ? 1 : 0
 
@@ -109,24 +120,23 @@ resource "aws_iam_role_policy" "slack_secret_policy" {
   role = aws_iam_role.slack_lambda_role.name
 
   policy = jsonencode({
-    Version = "2012-10-17",
+    Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow",
-      Action   = ["secretsmanager:GetSecretValue"],
+      Effect   = "Allow"
+      Action   = ["secretsmanager:GetSecretValue"]
       Resource = var.slack_secret_arn
     }]
   })
 }
 
-# Lambda Packaging
+# Lambda packaging
 data "archive_file" "slack_zip" {
   type        = "zip"
   source_file = "${path.module}/lambda/slack_forwarder.py"
   output_path = "${path.module}/build/slack_forwarder.zip"
 }
 
-# Lambda Function
-
+# Lambda function
 resource "aws_lambda_function" "slack_forwarder" {
   filename      = data.archive_file.slack_zip.output_path
   function_name = "${var.environment}-slack-forwarder"
@@ -147,7 +157,7 @@ resource "aws_lambda_function" "slack_forwarder" {
   source_code_hash = filebase64sha256(data.archive_file.slack_zip.output_path)
 }
 
-# SNS -> Lambda Subscription
+# SNS → Lambda subscription
 resource "aws_sns_topic_subscription" "lambda_sub" {
   topic_arn = aws_sns_topic.canary_alerts.arn
   protocol  = "lambda"
@@ -162,7 +172,7 @@ resource "aws_lambda_permission" "allow_sns" {
   statement_id  = "AllowSNSInvoke"
 }
 
-# CloudWatch Alarm for Canary
+# CloudWatch Canary Alarm
 resource "aws_cloudwatch_metric_alarm" "canary_failed" {
   alarm_name        = "${var.environment}-vpc-canary-failed"
   alarm_description = "Triggers Slack alert when the VPC connectivity canary fails"
