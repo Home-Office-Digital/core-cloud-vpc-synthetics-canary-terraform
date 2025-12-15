@@ -168,7 +168,7 @@ resource "aws_lambda_function" "slack_forwarder" {
     }
   }
 
-  source_code_hash = filebase64sha256(data.archive_file.slack_zip.output_path)
+  source_code_hash = fileexists(data.archive_file.slack_zip.output_path) ? filebase64sha256(data.archive_file.slack_zip.output_path) : null
 }
 
 # SNS → Lambda subscription
