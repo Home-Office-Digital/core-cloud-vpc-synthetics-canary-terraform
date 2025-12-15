@@ -9,8 +9,6 @@ from datetime import datetime, timezone
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-MAX_RAW_LENGTH = 4000  # Slack block safe limit
-
 # Slack sender
 def send_slack(webhook: str, payload: dict):
     try:
@@ -58,14 +56,12 @@ def parse_event_context(record: dict) -> dict:
     try:
         parsed = json.loads(raw_message)
 
-        # CloudWatch Alarm JSON format
         context["alarmName"] = parsed.get("AlarmName")
         context["stateValue"] = parsed.get("NewStateValue")
         context["stateReason"] = parsed.get("NewStateReason")
         context["eventTime"] = parsed.get("StateChangeTime")
         context["region"] = parsed.get("Region")
 
-        # Canary name from Trigger.Dimensions
         trigger = parsed.get("Trigger", {})
         for dim in trigger.get("Dimensions", []):
             if dim.get("name") == "CanaryName":
@@ -73,7 +69,7 @@ def parse_event_context(record: dict) -> dict:
                 break
 
     except Exception:
-        logger.debug("Failed to parse structured CloudWatch alarm JSON")
+        logger.debug("Failed to parse CloudWatch alarm JSON")
 
     if not context["region"]:
         context["region"] = os.environ.get("AWS_REGION")
@@ -81,8 +77,6 @@ def parse_event_context(record: dict) -> dict:
     return context
 
 # Formatting helpers
-
-
 def get_status_attributes(status_text: str):
     mapping = {
         "ALARM": (":rotating_light:", "CANARY FAILURE DETECTED"),
@@ -103,18 +97,7 @@ def _fmt_ts(iso_ts: str):
     except Exception:
         return iso_ts
 
-def build_console_links(region: str, canary_name: str, alarm_name: str) -> dict:
-    if not region:
-        return {"canary_link": None, "alarm_link": None}
-
-    return {
-        "canary_link": f"https://{region}.console.aws.amazon.com/cloudwatch/home"
-                       f"?region={region}#synthetics:canaryDetail/{canary_name}",
-        "alarm_link": f"https://{region}.console.aws.amazon.com/cloudwatch/home"
-                      f"?region={region}#alarmsV2:alarm/{alarm_name}",
-    }
-
-# Slack message builder
+# Slack message builder (CLEAN)
 def format_slack_message(raw: str, ctx: dict) -> dict:
     status = (ctx.get("stateValue") or "ALARM").upper()
     alarm = ctx.get("alarmName") or "Unknown Alarm"
@@ -125,14 +108,15 @@ def format_slack_message(raw: str, ctx: dict) -> dict:
     time = _fmt_ts(ctx.get("eventTime"))
 
     emoji, header = get_status_attributes(status)
-    links = build_console_links(region, canary, alarm)
-
-    raw_display = raw if len(raw) <= MAX_RAW_LENGTH else raw[:MAX_RAW_LENGTH] + "\n...truncated..."
 
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": f"{emoji} {header}", "emoji": True},
+            "text": {
+                "type": "plain_text",
+                "text": f"{emoji} {header}",
+                "emoji": True
+            },
         },
         {"type": "divider"},
         {
@@ -148,40 +132,17 @@ def format_slack_message(raw: str, ctx: dict) -> dict:
         },
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": f"*Reason:*\n```{reason}```"},
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Reason:*\n```{reason}```"
+            },
         },
     ]
 
-    actions = []
-    if links.get("canary_link"):
-        actions.append({
-            "type": "button",
-            "style": "primary",
-            "text": {"type": "plain_text", "text": "View Canary"},
-            "url": links["canary_link"],
-        })
-    if links.get("alarm_link"):
-        actions.append({
-            "type": "button",
-            "text": {"type": "plain_text", "text": "View Alarm"},
-            "url": links["alarm_link"],
-        })
-
-    if actions:
-        blocks.append({"type": "actions", "elements": actions})
-
-    blocks.extend([
-        {"type": "divider"},
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Raw Event:*\n```json\n{raw_display}\n```",
-            },
-        },
-    ])
-
-    return {"text": "CloudWatch Canary Alert", "blocks": blocks}
+    return {
+        "text": "CloudWatch Canary Alert",
+        "blocks": blocks,
+    }
 
 # Lambda entrypoint
 def lambda_handler(event, context):
