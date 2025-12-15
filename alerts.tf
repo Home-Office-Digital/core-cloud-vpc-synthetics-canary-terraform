@@ -48,6 +48,20 @@ resource "aws_kms_key" "sns_canary_cmk" {
           "kms:GenerateDataKey"
         ]
         Resource = "*"
+      },
+      # CloudWatch Alarms (required)
+      {
+        Sid    = "AllowCloudWatchToUseKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
       }
     ]
   })
