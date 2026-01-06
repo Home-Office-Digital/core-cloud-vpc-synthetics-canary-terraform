@@ -6,6 +6,8 @@ locals {
   tags = {
     Environment = var.environment
     CostCentre  = "canary-testing"
+    Owner       = "networktest"
+    Application = "canary"
   }
 }
 resource "aws_kms_key" "sns_canary_cmk" {
