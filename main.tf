@@ -1,12 +1,14 @@
+locals {
+  tags = {
+    Environment = var.environment
+    CostCentre  = "canary-testing"
+  }
+}
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
 
-  tags = {
-    Name        = "CanaryBucket"
-    Environment = var.environment
-    CostCentre  = "test"
-  }
+  tags = local.tags
 }
 resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   bucket = aws_s3_bucket.canary_bucket.id
@@ -43,10 +45,7 @@ resource "aws_iam_role" "canary_role" {
       Action = "sts:AssumeRole"
     }]
   })
-  tags = {
-    Environment = var.environment
-    CostCentre  = "test"
-  }
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "canary_policy" {
@@ -108,10 +107,7 @@ resource "aws_s3_object" "canary_script" {
   key    = "connectivity_check.js.zip"
   source = "${path.module}/connectivity_check.js.zip"
   etag   = filemd5("${path.module}/connectivity_check.js.zip")
-  tags = {
-    Environment = var.environment
-    CostCentre  = "test"
-  }
+  tags   = local.tags
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {
@@ -146,9 +142,5 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
     }
   }
 
-  tags = {
-    Name        = "VPCConnectivityCanary"
-    Environment = var.environment
-    CostCentre  = "test"
-  }
+  tags = local.tags
 }
