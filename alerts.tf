@@ -68,6 +68,7 @@ resource "aws_kms_key" "sns_canary_cmk" {
 
   tags = {
     Environment = var.environment
+    CostCentre  = "test"
   }
 }
 
@@ -119,6 +120,10 @@ resource "aws_iam_role" "slack_lambda_role" {
       Action    = "sts:AssumeRole"
     }]
   })
+  tags = {
+    Environment = var.environment
+    CostCentre  = "test"
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -169,6 +174,10 @@ resource "aws_lambda_function" "slack_forwarder" {
   }
 
   source_code_hash = fileexists(data.archive_file.slack_zip.output_path) ? filebase64sha256(data.archive_file.slack_zip.output_path) : null
+  tags = {
+    Environment = var.environment
+    CostCentre  = "test"
+  }
 }
 
 # SNS → Lambda subscription
@@ -206,4 +215,8 @@ resource "aws_cloudwatch_metric_alarm" "canary_failed" {
   treat_missing_data = "notBreaching"
 
   alarm_actions = [aws_sns_topic.canary_alerts.arn]
+  tags = {
+    Environment = var.environment
+    CostCentre  = "test"
+  }
 }
