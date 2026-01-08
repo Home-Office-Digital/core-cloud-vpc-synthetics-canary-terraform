@@ -31,6 +31,11 @@ resource "aws_kms_key" "canary_bucket_cmk" {
   tags                    = local.tags
 }
 
+resource "aws_kms_alias" "canary_bucket_cmk_alias" {
+  name          = "alias/${var.environment}-canary-bucket"
+  target_key_id = aws_kms_key.canary_bucket_cmk.key_id
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "canary_bucket_encryption" {
   bucket = aws_s3_bucket.canary_bucket.id
 
