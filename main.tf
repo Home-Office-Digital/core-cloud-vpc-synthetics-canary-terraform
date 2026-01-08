@@ -73,6 +73,51 @@ resource "aws_s3_bucket_lifecycle_configuration" "canary_bucket" {
     }
   }
 }
+resource "aws_kms_key" "canary_bucket_cmk" {
+  description             = "CMK for S3 canary bucket (${var.environment})"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # 🔐 Account administrators (required)
+      {
+        Sid    = "AllowAccountAdminsFullControl"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+
+      # 🪣 Allow S3 to use the key for bucket encryption
+      {
+        Sid    = "AllowS3UseOfKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
+}
 
 resource "aws_iam_role" "canary_role" {
   name = "${var.environment}-canary-role"
