@@ -24,13 +24,47 @@ resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   ignore_public_acls      = true
   restrict_public_buckets = true
 }
+resource "aws_kms_key" "canary_bucket_cmk" {
+  description             = "CMK for S3 canary bucket (${var.environment})"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  tags                    = local.tags
+}
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "canary_bucket_encryption" {
   bucket = aws_s3_bucket.canary_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.canary_bucket_cmk.arn
+    }
+  }
+}
+resource "aws_s3_bucket_versioning" "canary_bucket" {
+  bucket = aws_s3_bucket.canary_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "canary_bucket" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  rule {
+    id     = "expire-canary-artifacts"
+    status = "Enabled"
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }

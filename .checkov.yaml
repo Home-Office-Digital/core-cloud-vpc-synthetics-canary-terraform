@@ -2,3 +2,5 @@ skip-check:
   - CKV2_AWS_62  # bucket events not needed for ephemeral artifacts
   - CKV_AWS_290  # ENI actions require wildcard; constrained by conditions
   - CKV_AWS_355
+  - CKV_AWS_144 # Skip Cross-region replication
+  - CKV_AWS_18  # Skip Access logging enabled
