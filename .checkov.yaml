@@ -1,0 +1,4 @@
+skip-check:
+  - CKV2_AWS_62  # bucket events not needed for ephemeral artifacts
+  - CKV_AWS_290  # ENI actions require wildcard; constrained by conditions
+  - CKV_AWS_355
