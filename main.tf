@@ -4,10 +4,13 @@ terraform {
 
 locals {
   tags = {
-    Environment = var.environment
-    CostCentre  = "canary-testing"
-    Owner       = "networktest"
-    Application = "canary"
+    cost-centre : "1709144"
+    account-code : "521835"
+    portfolio-id : "cto"
+    project-id : "cc"
+    service-id : "core-platform"
+    owner-business : "cc-andromeda"
+    budget-holder : "corecloud@homeoffice.gov.uk"
   }
 }
 resource "aws_s3_bucket" "canary_bucket" {
