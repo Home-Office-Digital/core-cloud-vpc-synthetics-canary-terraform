@@ -9,6 +9,7 @@ locals {
     portfolio-id : "cto"
     project-id : "cc"
     service-id : "core-platform"
+    environment-type : "test"
     owner-business : "cc-andromeda"
     budget-holder : "corecloud@homeoffice.gov.uk"
   }
