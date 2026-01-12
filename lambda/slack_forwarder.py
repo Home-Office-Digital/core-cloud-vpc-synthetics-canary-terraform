@@ -77,13 +77,20 @@ def parse_event_context(record: dict) -> dict:
     return context
 
 # Formatting helpers
+ALERT_EMOJI = ":rotating_light:"
+SUCCESS_EMOJI = ":large_green_circle:"
+
+CANARY_FAILURE_MSG = "CANARY FAILURE DETECTED"
+CANARY_RESOLVED_MSG = "CANARY ISSUE RESOLVED"
+
+
 def get_status_attributes(status_text: str):
     mapping = {
-        "ALARM": (":rotating_light:", "CANARY FAILURE DETECTED"),
-        "ERROR": (":rotating_light:", "CANARY FAILURE DETECTED"),
-        "FAILED": (":rotating_light:", "CANARY FAILURE DETECTED"),
-        "OK": (":large_green_circle:", "CANARY ISSUE RESOLVED"),
-        "RESOLVED": (":large_green_circle:", "CANARY ISSUE RESOLVED"),
+        "ALARM": (ALERT_EMOJI, CANARY_FAILURE_MSG),
+        "ERROR": (ALERT_EMOJI, CANARY_FAILURE_MSG),
+        "FAILED": (ALERT_EMOJI, CANARY_FAILURE_MSG),
+        "OK": (SUCCESS_EMOJI, CANARY_RESOLVED_MSG),
+        "RESOLVED": (SUCCESS_EMOJI, CANARY_RESOLVED_MSG),
     }
     return mapping.get(status_text.upper(), (":warning:", "CANARY ALERT"))
 
@@ -142,6 +149,10 @@ def format_slack_message(raw: str, ctx: dict) -> dict:
     return {
         "text": "CloudWatch Canary Alert",
         "blocks": blocks,
+         "metadata": {
+            "event_type": "cloudwatch_canary",
+            "event_payload": raw,
+        },
     }
 
 # Lambda entrypoint
