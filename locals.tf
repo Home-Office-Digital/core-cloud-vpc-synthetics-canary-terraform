@@ -8,6 +8,7 @@ locals {
     environment-type : "test"
     owner-business : "cc-andromeda"
     budget-holder : "corecloud@homeoffice.gov.uk"
+    Costing : "test"
   }
 }
 
