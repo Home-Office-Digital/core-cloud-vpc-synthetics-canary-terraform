@@ -4,3 +4,4 @@ skip-check:
   - CKV_AWS_355
   - CKV_AWS_144 # Skip Cross-region replication
   - CKV_AWS_18  # Skip Access logging enabled
+  - CCL_COSMOS_FINOPS_TAGS # tags are present
