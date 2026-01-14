@@ -1,19 +1,13 @@
 terraform {
-  backend "s3" {}
-}
-
-locals {
-  tags = {
-    cost-centre : "1709144"
-    account-code : "521835"
-    portfolio-id : "cto"
-    project-id : "cc"
-    service-id : "core-platform"
-    environment-type : "test"
-    owner-business : "cc-andromeda"
-    budget-holder : "corecloud@homeoffice.gov.uk"
+  backend "s3" {
+    bucket         = "network-testing-terragrunt-state "
+    key            = "terraform.tfstate"
+    region         = "eu-west-2"
+    dynamodb_table = "network-testing-terragrunt-state-lock-table"
+    encrypt        = true
   }
 }
+
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
@@ -27,12 +21,6 @@ resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
-}
-resource "aws_kms_key" "canary_bucket_cmk" {
-  description             = "CMK for S3 canary bucket (${var.environment})"
-  enable_key_rotation     = true
-  deletion_window_in_days = 30
-  tags                    = local.tags
 }
 
 resource "aws_kms_alias" "canary_bucket_cmk_alias" {
