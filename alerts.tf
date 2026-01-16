@@ -142,7 +142,7 @@ resource "aws_kms_alias" "sns_canary_alias" {
 # SNS Topic (encrypted)
 resource "aws_sns_topic" "canary_alerts" {
   name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = aws_kms_alias.sns_canary_cmk.arn
+  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
   tags              = local.tags
 }
 
