@@ -191,6 +191,11 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+resource "aws_iam_role_policy_attachment" "slack_forwarder_vpc_access" {
+  role       = aws_iam_role.slack_lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+}
+
 # Secrets Manager access 
 resource "aws_iam_role_policy" "slack_secret_policy" {
   count = var.slack_secret_arn != "" ? 1 : 0
