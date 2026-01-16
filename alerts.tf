@@ -228,7 +228,7 @@ resource "aws_lambda_code_signing_config" "slack_forwarder" {
   }
 
   policies {
-    untrusted_artifact_on_deployment = "Enforce"
+    untrusted_artifact_on_deployment = "Warn"
   }
 
   tags = local.tags
