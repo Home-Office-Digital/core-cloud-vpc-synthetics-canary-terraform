@@ -142,28 +142,35 @@ resource "aws_kms_alias" "sns_canary_alias" {
 # SNS Topic (encrypted)
 resource "aws_sns_topic" "canary_alerts" {
   name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "AllowPublishFromCloudWatchAlarms"
-        Effect    = "Allow"
-        Principal = { Service = "cloudwatch.amazonaws.com" }
-        Action    = "sns:Publish"
-        Resource  = aws_sns_topic.canary_alerts.arn
-        Condition = {
-          StringEquals = {
-            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
-          }
-        }
-      }
-    ]
-  })
-
-  tags = local.tags
+  kms_master_key_id = aws_kms_alias.sns_canary_cmk.arn
+  tags              = local.tags
 }
+
+data "aws_iam_policy_document" "canary_alerts_topic_policy" {
+  statement {
+    sid    = "AllowPublishFromCloudWatch"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["cloudwatch.amazonaws.com"]
+    }
+
+    actions   = ["SNS:Publish"]
+    resources = [aws_sns_topic.canary_alerts.arn]
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceAccount"
+      values   = [data.aws_caller_identity.current.account_id]
+    }
+  }
+}
+
+resource "aws_sns_topic_policy" "canary_alerts" {
+  arn    = aws_sns_topic.canary_alerts.arn
+  policy = data.aws_iam_policy_document.canary_alerts_topic_policy.json
+}
+
 # Lambda IAM Role
 resource "aws_iam_role" "slack_lambda_role" {
   name = "${var.environment}-slack-forwarder-role"
@@ -210,7 +217,7 @@ data "archive_file" "slack_zip" {
 
 # Lambda function
 resource "aws_signer_signing_profile" "slack_forwarder" {
-  name_prefix = "${var.environment}-slack-forwarder-"
+  name_prefix = "${var.environment}-slackfw"
   platform_id = "AWSLambda-SHA384-ECDSA"
   tags        = local.tags
 }
