@@ -18,7 +18,7 @@ locals {
 
 locals {
   signer_name_prefix = substr(
-    regexreplace("${var.environment}slackfw", "[^A-Za-z0-9]", ""),
+    replace("${var.environment}slackfw", "-", ""),
     0,
     38
   )
