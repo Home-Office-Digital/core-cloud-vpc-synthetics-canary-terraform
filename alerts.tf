@@ -217,7 +217,7 @@ data "archive_file" "slack_zip" {
 
 # Lambda function
 resource "aws_signer_signing_profile" "slack_forwarder" {
-  name_prefix = "${var.environment}-slackfw"
+  name_prefix = local.signer_name_prefix
   platform_id = "AWSLambda-SHA384-ECDSA"
   tags        = local.tags
 }

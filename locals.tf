@@ -15,3 +15,11 @@ locals {
 locals {
   slack_forwarder_name = "${var.environment}-slack-forwarder"
 }
+
+locals {
+  signer_name_prefix = substr(
+    regexreplace("${var.environment}slackfw", "[^A-Za-z0-9]", ""),
+    0,
+    38
+  )
+}
