@@ -42,3 +42,4 @@ terraform.rc
 **/__not_tracked_*
 
 *.zip
+**/*.zip
