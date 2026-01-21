@@ -43,3 +43,5 @@ terraform.rc
 
 *.zip
 **/*.zip
+lambda/*.zip
+build/*.zip
