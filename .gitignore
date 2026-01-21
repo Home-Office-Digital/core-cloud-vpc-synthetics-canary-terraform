@@ -42,6 +42,7 @@ terraform.rc
 **/__not_tracked_*
 
 *.zip
+*.py.zip
 **/*.zip
 lambda/*.zip
 build/*.zip
