@@ -45,3 +45,4 @@ terraform.rc
 **/*.zip
 lambda/*.zip
 build/*.zip
+lambda/slack_forwarder.py.zip
