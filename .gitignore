@@ -40,3 +40,10 @@ terraform.rc
 .DS_Store
 
 **/__not_tracked_*
+
+*.zip
+*.py.zip
+**/*.zip
+lambda/*.zip
+build/*.zip
+lambda/slack_forwarder.py.zip

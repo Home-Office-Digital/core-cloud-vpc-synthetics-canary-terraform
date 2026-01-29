@@ -1,15 +1,18 @@
 terraform {
-  backend "s3" {}
+  backend "s3" {
+    bucket         = "network-testing-terragrunt-state "
+    key            = "terraform.tfstate"
+    region         = "eu-west-2"
+    dynamodb_table = "network-testing-terragrunt-state-lock-table"
+    encrypt        = true
+  }
 }
 
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
 
-  tags = {
-    Name        = "CanaryBucket"
-    Environment = var.environment
-  }
+  tags = local.tags
 }
 resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   bucket = aws_s3_bucket.canary_bucket.id
@@ -20,14 +23,92 @@ resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   restrict_public_buckets = true
 }
 
+resource "aws_kms_alias" "canary_bucket_cmk_alias" {
+  name          = "alias/${var.environment}-canary-bucket"
+  target_key_id = aws_kms_key.canary_bucket_cmk.key_id
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "canary_bucket_encryption" {
   bucket = aws_s3_bucket.canary_bucket.id
 
   rule {
     apply_server_side_encryption_by_default {
-      sse_algorithm = "AES256"
+      sse_algorithm     = "aws:kms"
+      kms_master_key_id = aws_kms_key.canary_bucket_cmk.arn
     }
   }
+}
+resource "aws_s3_bucket_versioning" "canary_bucket" {
+  bucket = aws_s3_bucket.canary_bucket.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "canary_bucket" {
+  bucket = aws_s3_bucket.canary_bucket.id
+
+  rule {
+    id     = "expire-canary-artifacts"
+    status = "Enabled"
+
+    expiration {
+      days = 30
+    }
+
+    noncurrent_version_expiration {
+      noncurrent_days = 7
+    }
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+resource "aws_kms_key" "canary_bucket_cmk" {
+  description             = "CMK for S3 canary bucket (${var.environment})"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      # 🔐 Account administrators (required)
+      {
+        Sid    = "AllowAccountAdminsFullControl"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+
+      # 🪣 Allow S3 to use the key for bucket encryption
+      {
+        Sid    = "AllowS3UseOfKey"
+        Effect = "Allow"
+        Principal = {
+          Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+
+  tags = local.tags
 }
 
 resource "aws_iam_role" "canary_role" {
@@ -46,6 +127,7 @@ resource "aws_iam_role" "canary_role" {
       Action = "sts:AssumeRole"
     }]
   })
+  tags = local.tags
 }
 
 resource "aws_iam_role_policy_attachment" "canary_policy" {
@@ -71,7 +153,7 @@ resource "aws_iam_role_policy" "canary_vpc_policy" {
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface",
-          "cloudwatch:PutMetricData" 
+          "cloudwatch:PutMetricData"
         ],
         Resource = "*"
       }
@@ -102,11 +184,19 @@ resource "aws_iam_role_policy" "canary_s3_access" {
   })
 }
 
+data "archive_file" "canary_zip" {
+  type        = "zip"
+  source_file = "${path.module}/connectivity_check.js"
+  output_path = "${path.module}/build/connectivity_check.js.zip"
+}
+
 resource "aws_s3_object" "canary_script" {
   bucket = aws_s3_bucket.canary_bucket.bucket
   key    = "connectivity_check.js.zip"
-  source = "${path.module}/connectivity_check.js.zip"
-  etag   = filemd5("${path.module}/connectivity_check.js.zip")
+  source = data.archive_file.canary_zip.output_path
+  tags   = local.tags
+
+  depends_on = [data.archive_file.canary_zip]
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {
@@ -131,15 +221,15 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
   run_config {
     environment_variables = {
 
-      DEST_IP     = join(",", var.target_ips)
-      ALLOW_PORTS = join(",", var.allowed_ports)
-      DENY_PORTS  = join(",", var.denied_ports)
-      CONNECT_TIMEOUT_MS = "3000"
+      DEST_IP             = join(",", var.target_ips)
+      ALLOW_PORTS         = join(",", var.allowed_ports)
+      DENY_PORTS          = join(",", var.denied_ports)
+      SCAN_START          = var.start_scan
+      SCAN_END            = var.scan_end
+      ALERT_ON_OPEN_PORTS = var.alert_on_open_ports
+      CONNECT_TIMEOUT_MS  = "3000"
     }
   }
 
-  tags = {
-    Name        = "VPCConnectivityCanary"
-    Environment = var.environment
-  }
+  tags = local.tags
 }
