@@ -221,7 +221,7 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
   run_config {
     environment_variables = {
 
-      DEST_IP             = join(",", var.target_ips)
+      DEST_IP             = aws_instance.ec2.private_dns
       ALLOW_PORTS         = join(",", var.allowed_ports)
       DENY_PORTS          = join(",", var.denied_ports)
       SCAN_START          = var.start_scan

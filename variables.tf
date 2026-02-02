@@ -74,3 +74,25 @@ variable "slack_secret_arn" {
   default     = ""
   description = "Secrets Manager ARN that stores Slack webhook"
 }
+
+# EC2 Instance 
+
+variable "dest_vpc_id" {
+  description = "VPC ID to create the EC2 instance "
+  type        = string
+}
+
+variable "dest_subnet_id" {
+  description = "Existing Subnet ID to create the EC2 instance"
+  type        = string
+}
+
+variable "allowed_https_cidr" {
+  description = "CIDR allowed to access HTTPS (443)"
+  type        = list(string)
+}
+
+variable "instance_type" {
+  type    = string
+  default = "t2.micro"
+}

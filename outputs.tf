@@ -14,3 +14,8 @@ output "canary_alert_topic_arn" {
 output "slack_forwarder_lambda" {
   value = aws_lambda_function.slack_forwarder.function_name
 }
+
+output "ec2_dns_name" {
+  description = "DNS name of the EC2 instance"
+  value       = aws_instance.ec2.private_dns
+}
