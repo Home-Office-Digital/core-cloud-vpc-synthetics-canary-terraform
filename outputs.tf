@@ -17,5 +17,21 @@ output "slack_forwarder_lambda" {
 
 output "ec2_dns_name" {
   description = "DNS name of the EC2 instance"
-  value       = aws_instance.ec2.private_dns
+  value       = aws_instance.this.private_dns
+}
+
+output "instance_id" {
+  value = aws_instance.this.id
+}
+
+output "private_ip" {
+  value = aws_instance.this.private_ip
+}
+
+output "security_group_id" {
+  value = aws_security_group.this.id
+}
+
+output "iam_instance_profile" {
+  value = aws_instance.this.iam_instance_profile
 }

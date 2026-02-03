@@ -96,3 +96,53 @@ variable "instance_type" {
   type    = string
   default = "t2.micro"
 }
+
+variable "instance_name" {
+  type    = string
+  default = "ssm-managed-ec2"
+}
+
+variable "instance_profile_name" {
+  description = "IAM Instance Profile name for the EC2 instance"
+  type        = string
+  default     = "EC2-Default-SSM-AD-Role"
+}
+
+variable "security_group_name" {
+  type        = string
+  description = "Name of the security group"
+  default     = "ssm-managed-sg"
+}
+# Ingress: empty by default (no inbound)
+variable "ingress_rules" {
+  description = "Ingress rules; each has a LIST of CIDRs. Default is empty (no ingress)."
+  type = list(object({
+    description = optional(string)
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = []
+}
+
+# Egress: configurable; default allows all outbound
+variable "egress_rules" {
+  description = "Egress rules; each has a LIST of CIDRs."
+  type = list(object({
+    description = optional(string)
+    from_port   = number
+    to_port     = number
+    protocol    = string
+    cidr_blocks = list(string)
+  }))
+  default = [
+    {
+      description = "All outbound"
+      from_port   = 0
+      to_port     = 0
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  ]
+}
