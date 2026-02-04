@@ -139,8 +139,8 @@ variable "egress_rules" {
   default = [
     {
       description = "All outbound"
-      from_port   = 0
-      to_port     = 0
+      from_port   = 443
+      to_port     = 443
       protocol    = "tcp"
       cidr_blocks = ["0.0.0.0/0"]
     }
