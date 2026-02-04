@@ -60,11 +60,16 @@ resource "aws_instance" "this" {
   vpc_security_group_ids = [aws_security_group.this.id]
 
   iam_instance_profile = data.aws_iam_instance_profile.this.name
-
+  monitoring           = true
+  ebs_optimized        = true
   metadata_options {
     http_tokens = "required"
   }
+  root_block_device {
+    encrypted   = true
+    volume_type = "gp3"
 
+  }
   # Ensure SSM agent is running
   user_data = <<-EOF
     #!/bin/bash
