@@ -220,14 +220,20 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
 
   run_config {
     environment_variables = {
-
       DEST_IP             = local.dest_ip
-      ALLOW_PORTS         = join(",", var.allowed_ports)
-      DENY_PORTS          = join(",", var.denied_ports)
-      SCAN_START          = var.start_scan
-      SCAN_END            = var.scan_end
-      ALERT_ON_OPEN_PORTS = var.alert_on_open_ports
+      ALLOW_PORTS         = join(",", [for p in var.allowed_ports : tostring(p)])
+      DENY_PORTS          = join(",", [for p in var.denied_ports : tostring(p)])
+      SCAN_START          = tostring(var.start_scan)
+      SCAN_END            = tostring(var.scan_end)
+      ALERT_ON_OPEN_PORTS = tostring(var.alert_on_open_ports)
       CONNECT_TIMEOUT_MS  = "3000"
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.dest_ip != ""
+      error_message = "DEST_IP is empty. Ensure target_ec2 module creates EC2 or set var.target_ips."
     }
   }
 

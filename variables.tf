@@ -3,6 +3,7 @@ variable "region" {
   type        = string
   default     = "eu-west-2"
 }
+
 variable "bucket_name" {
   description = "Name of the S3 bucket for Canary artifacts"
   type        = string
@@ -34,34 +35,42 @@ variable "security_group_ids" {
 }
 
 variable "target_ips" {
-  description = "Comma-separated list of target IPs"
-  type        = list(string)
+  description = "Comma-separated list of target IPs/DNS (fallback when EC2 not created)"
+  type        = string
+  default     = ""
 }
 
 variable "allowed_ports" {
-  description = "Comma-separated list of allowed ports"
-  type        = list(string)
+  description = "List of allowed ports"
+  type        = list(number)
+  default     = []
 }
 
 variable "denied_ports" {
-  description = "Comma-separated list of denied ports"
-  type        = list(string)
+  description = "List of denied ports"
+  type        = list(number)
+  default     = []
 }
 
+# Ports are numbers
 variable "start_scan" {
-  description = "port numbers to start scanning from"
-  type        = string
+  description = "Port to start scanning from"
+  type        = number
+  default     = 1
 }
 
 variable "scan_end" {
-  description = "port numbers to stop scanning"
-  type        = string
+  description = "Port to stop scanning at"
+  type        = number
+  default     = 1024
 }
 
 variable "alert_on_open_ports" {
-  description = "alert_on_open_ports"
+  description = "Fail canary if any unexpected open ports are found during scan"
   type        = bool
+  default     = true
 }
+
 variable "slack_webhook_url" {
   type        = string
   default     = ""
@@ -73,82 +82,4 @@ variable "slack_secret_arn" {
   type        = string
   default     = ""
   description = "Secrets Manager ARN that stores Slack webhook"
-}
-
-# EC2 Instance 
-
-variable "dest_vpc_id" {
-  description = "VPC ID to create the EC2 instance "
-  type        = string
-}
-
-variable "dest_subnet_id" {
-  description = "Existing Subnet ID to create the EC2 instance"
-  type        = string
-}
-
-variable "instance_type" {
-  type    = string
-  default = "t3.micro"
-}
-
-variable "instance_name" {
-  type    = string
-  default = "ssm-managed-ec2"
-}
-
-variable "instance_profile_name" {
-  description = "IAM Instance Profile name for the EC2 instance"
-  type        = string
-  default     = "EC2-Default-SSM-AD-Role"
-}
-
-variable "security_group_name" {
-  type        = string
-  description = "Name of the security group"
-  default     = "ssm-managed-sg"
-}
-# Ingress: empty by default (no inbound)
-variable "ingress_rules" {
-  description = "Ingress rules; each has a LIST of CIDRs. Default is empty (no ingress)."
-  type = list(object({
-    description = optional(string)
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = []
-}
-
-# Egress: configurable; default allows all outbound
-variable "egress_rules" {
-  description = "Egress rules; each has a LIST of CIDRs."
-  type = list(object({
-    description = optional(string)
-    from_port   = number
-    to_port     = number
-    protocol    = string
-    cidr_blocks = list(string)
-  }))
-  default = [
-    {
-      description = "All outbound"
-      from_port   = 443
-      to_port     = 443
-      protocol    = "tcp"
-      cidr_blocks = ["0.0.0.0/0"]
-    }
-  ]
-}
-variable "create_ec2" {
-  description = "Whether to create the EC2 instance and its security group"
-  type        = bool
-  default     = true
-}
-
-variable "manual_dest_ip" {
-  description = "Optional: provide a DNS/IP when not creating EC2 (e.g., existing instance private DNS/IP)"
-  type        = string
-  default     = ""
 }
