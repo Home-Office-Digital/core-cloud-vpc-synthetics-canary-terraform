@@ -59,9 +59,10 @@ resource "aws_instance" "this" {
   subnet_id              = var.dest_subnet_id
   vpc_security_group_ids = [aws_security_group.this.id]
 
-  iam_instance_profile = data.aws_iam_instance_profile.this.name
-  monitoring           = true
-  ebs_optimized        = true
+  iam_instance_profile        = data.aws_iam_instance_profile.this.name
+  monitoring                  = true
+  ebs_optimized               = true
+  associate_public_ip_address = false
   metadata_options {
     http_tokens = "required"
   }
