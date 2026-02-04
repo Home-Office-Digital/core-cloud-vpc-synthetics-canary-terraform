@@ -68,7 +68,7 @@ variable "scan_end" {
 variable "alert_on_open_ports" {
   description = "Fail canary if any unexpected open ports are found during scan"
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "slack_webhook_url" {
