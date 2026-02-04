@@ -23,3 +23,7 @@ locals {
     38
   )
 }
+
+locals {
+  dest_ip = var.create_ec2 ? aws_instance.this[0].private_dns : ""
+}

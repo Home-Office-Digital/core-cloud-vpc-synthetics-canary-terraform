@@ -87,14 +87,9 @@ variable "dest_subnet_id" {
   type        = string
 }
 
-variable "allowed_https_cidr" {
-  description = "CIDR allowed to access HTTPS (443)"
-  type        = list(string)
-}
-
 variable "instance_type" {
   type    = string
-  default = "t2.micro"
+  default = "t3.micro"
 }
 
 variable "instance_name" {
@@ -145,4 +140,9 @@ variable "egress_rules" {
       cidr_blocks = ["0.0.0.0/0"]
     }
   ]
+}
+variable "create_ec2" {
+  description = "Whether to create the EC2 instance and its security group"
+  type        = bool
+  default     = true
 }
