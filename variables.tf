@@ -146,3 +146,9 @@ variable "create_ec2" {
   type        = bool
   default     = true
 }
+
+variable "manual_dest_ip" {
+  description = "Optional: provide a DNS/IP when not creating EC2 (e.g., existing instance private DNS/IP)"
+  type        = string
+  default     = ""
+}

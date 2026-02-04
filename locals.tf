@@ -25,5 +25,5 @@ locals {
 }
 
 locals {
-  dest_ip = var.create_ec2 ? aws_instance.this[0].private_dns : ""
+  dest_ip = var.create_ec2 ? aws_instance.this[0].private_dns : var.manual_dest_ip
 }
