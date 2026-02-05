@@ -1,4 +1,4 @@
-module "target_ec2" {
+module "ec2" {
   source = "../../modules/ec2"
 
   create_ec2            = var.create_ec2
