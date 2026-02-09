@@ -5,6 +5,7 @@ locals {
     portfolio-id : "cto"
     project-id : "cc"
     service-id : "core-platform"
+    source-repo : "core-cloud-vpc-synthetics-canary-terraform"
     environment-type : "test"
     owner-business : "cc-andromeda"
     budget-holder : "corecloud@homeoffice.gov.uk"
