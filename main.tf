@@ -96,7 +96,8 @@ resource "aws_kms_key" "canary_bucket_cmk" {
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
-          "kms:DescribeKey"
+          "kms:DescribeKey",
+          "kms:Update*",
         ]
         Resource = "*"
         Condition = {
