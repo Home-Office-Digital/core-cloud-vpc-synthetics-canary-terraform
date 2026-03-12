@@ -1,13 +1,3 @@
-terraform {
-  backend "s3" {
-    bucket         = "network-testing-terragrunt-state "
-    key            = "terraform.tfstate"
-    region         = "eu-west-2"
-    dynamodb_table = "network-testing-terragrunt-state-lock-table"
-    encrypt        = true
-  }
-}
-
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
