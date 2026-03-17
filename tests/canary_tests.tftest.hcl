@@ -1,13 +1,4 @@
-provider "aws" {
-  region                      = "eu-west-2"
-  skip_credentials_validation = true
-  skip_requesting_account_id  = true
-  skip_metadata_api_check     = true
-  access_key                  = "mock_access_key"
-  secret_key                  = "mock_secret_key"
-}
-
-# tests/canary.tftest.hcl
+# tests/canary_tests.tftest.hcl
 
 variables {
   bucket_name         = "test-canary-bucket-example"
@@ -15,8 +6,8 @@ variables {
   subnet_ids          = ["subnet-12345678", "subnet-87654321"]
   security_group_ids  = ["sg-12345678"]
   target_ips          = ["10.0.1.10", "10.0.1.11"]
-  allowed_ports       = [443, 8443]
-  denied_ports        = [25, 3306]
+  allowed_ports       = ["443", "8443"]
+  denied_ports        = ["25", "3306"]
   start_scan          = 1
   scan_end            = 500
   alert_on_open_ports = "false"
@@ -31,7 +22,13 @@ run "s3_security_defaults" {
   }
 
   assert {
-    condition     = aws_s3_bucket_public_access_block.canary_bucket_block.block_public_acls && aws_s3_bucket_public_access_block.canary_bucket_block.block_public_policy && aws_s3_bucket_public_access_block.canary_bucket_block.ignore_public_aclsn && aws_s3_bucket_public_access_block.canary_bucket_block.restrict_public_buckets
+    condition     = aws_s3_bucket_public_access_block.canary_bucket_block.block_public_acls 
+    && 
+    aws_s3_bucket_public_access_block.canary_bucket_block.block_public_policy 
+    && 
+    aws_s3_bucket_public_access_block.canary_bucket_block.ignore_public_aclsn 
+    && 
+    aws_s3_bucket_public_access_block.canary_bucket_block.restrict_public_buckets
     error_message = "S3 public access block settings must all be enabled."
   }
 
