@@ -1,0 +1,189 @@
+name: Terraform Tests
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'tests/**'
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform-tests.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'tests/**'
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform-tests.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: terraform-tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.7.0"
+  AWS_REGION: "eu-west-2"
+  TF_IN_AUTOMATION: "true"
+
+permissions:
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect Changed Test Scopes
+    runs-on: ubuntu-latest
+    outputs:
+      root_changed: ${{ steps.filter.outputs.root }}
+      ec2_changed: ${{ steps.filter.outputs.ec2 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check changed files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            root:
+              - 'tests/**'
+              - '*.tf'
+              - '*.tfvars'
+              - 'modules/ec2/**'
+              - '.github/workflows/terraform-tests.yaml'
+            ec2:
+              - 'modules/ec2/**'
+              - '.github/workflows/terraform-tests.yaml'
+
+  test-scopes:
+    name: ${{ matrix.emoji }} Test ${{ matrix.scope }}
+    needs: detect-changes
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scope: root
+            workdir: .
+            emoji: "🏠"
+          - scope: ec2
+            workdir: modules/ec2
+            emoji: "🧪"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Decide whether to run
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHANGED=false
+          case "${{ matrix.scope }}" in
+            root) CHANGED="${{ needs.detect-changes.outputs.root_changed }}" ;;
+            ec2)  CHANGED="${{ needs.detect-changes.outputs.ec2_changed }}" ;;
+          esac
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$CHANGED" == "true" ]]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_tests=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Node 24
+        if: steps.gate.outputs.run_tests == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup Terraform
+        if: steps.gate.outputs.run_tests == 'true'
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Show versions
+        if: steps.gate.outputs.run_tests == 'true'
+        run: |
+          node --version
+          terraform version
+
+      - name: Install npm dependencies
+        if: steps.gate.outputs.run_tests == 'true'
+        shell: bash
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          set -euo pipefail
+
+          if [ -f package.json ]; then
+            npm ci
+          fi
+
+          if [ -f lambda/package.json ]; then
+            cd lambda
+            npm ci
+          fi
+
+      - name: Terraform fmt
+        if: steps.gate.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.workdir }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        if: steps.gate.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.workdir }}
+        run: terraform init -backend=false
+
+      - name: Terraform validate
+        if: steps.gate.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.workdir }}
+        run: terraform validate -no-color
+
+      - name: Block apply-based tests
+        if: steps.gate.outputs.run_tests == 'true'
+        shell: bash
+        working-directory: ${{ matrix.workdir }}
+        run: |
+          set -euo pipefail
+          if [ -d tests ] && grep -R --line-number --include="*.tftest.hcl" 'command *= *apply' tests/; then
+            echo "::error::Apply-based Terraform tests are not allowed in CI."
+            exit 1
+          fi
+
+      - name: Terraform test
+        if: steps.gate.outputs.run_tests == 'true'
+        working-directory: ${{ matrix.workdir }}
+        run: terraform test -no-color -verbose
+
+      - name: Mark skipped
+        if: steps.gate.outputs.run_tests == 'false'
+        run: echo "No relevant changes for ${{ matrix.scope }}"
+
+  summary:
+    name: Summary
+    needs: [detect-changes, test-scopes]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write summary
+        run: |
+          echo "# Terraform test run complete" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- root changed: ${{ needs.detect-changes.outputs.root_changed || 'n/a' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- ec2 changed: ${{ needs.detect-changes.outputs.ec2_changed || 'n/a' }}" >> "$GITHUB_STEP_SUMMARY"
+
+  quality-gate:
+    name: Quality Gate
+    needs: [test-scopes]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce quality gate
+        run: |
+          if [[ "${{ needs.test-scopes.result }}" != "success" ]]; then
+            echo "::error::Terraform tests failed"
+            exit 1
+          fi
+          echo "::notice::All Terraform tests passed"
