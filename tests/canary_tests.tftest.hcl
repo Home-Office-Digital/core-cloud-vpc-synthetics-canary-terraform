@@ -22,16 +22,12 @@ run "s3_security_defaults" {
   }
 
   assert {
-    condition     = aws_s3_bucket_public_access_block.canary_bucket_block.block_public_acls 
-    && 
-    aws_s3_bucket_public_access_block.canary_bucket_block.block_public_policy 
-    && 
-    aws_s3_bucket_public_access_block.canary_bucket_block.ignore_public_aclsn 
-    && 
+    condition     = alltrue([ aws_s3_bucket_public_access_block.canary_bucket_block.block_public_acls,
+    aws_s3_bucket_public_access_block.canary_bucket_block.block_public_policy,
+    aws_s3_bucket_public_access_block.canary_bucket_block.ignore_public_acls,
     aws_s3_bucket_public_access_block.canary_bucket_block.restrict_public_buckets
-    error_message = "S3 public access block settings must all be enabled."
-  }
-
+  ])
+}
   assert {
     condition     = aws_s3_bucket_versioning.canary_bucket.versioning_configuration[0].status == "Enabled"
     error_message = "Bucket versioning must be enabled."
