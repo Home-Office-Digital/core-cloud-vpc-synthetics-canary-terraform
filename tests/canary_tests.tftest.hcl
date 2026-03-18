@@ -3,6 +3,7 @@
 variables {
   bucket_name         = "test-canary-bucket-example"
   environment         = "dev"
+  name_prefix         = "canary-test"
   subnet_ids          = ["subnet-12345678", "subnet-87654321"]
   security_group_ids  = ["sg-12345678"]
   target_ips          = ["10.0.1.10", "10.0.1.11"]
