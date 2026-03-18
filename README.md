@@ -11,7 +11,7 @@ This Terraform module deploys CloudWatch Synthetics canary in a source VPC to te
 Before using this module, ensure you have the following:
 
 - AWS credentials configured.
-- Terraform installed.
+- Terraform >= 1.7.0 installed.
 - A working knowledge of Terraform.
 
 ## Getting Started
