@@ -1,15 +1,3 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
-provider "aws" {
-  region = var.region
-}
-
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
@@ -53,6 +41,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "canary_bucket" {
   rule {
     id     = "expire-canary-artifacts"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 30

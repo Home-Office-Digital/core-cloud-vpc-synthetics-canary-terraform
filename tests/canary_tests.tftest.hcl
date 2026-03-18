@@ -14,6 +14,9 @@ variables {
   scan_end            = "500"
   alert_on_open_ports = "false"
 }
+
+mock_provider "aws" {}
+
 run "s3_security_defaults" {
   command = plan
 
