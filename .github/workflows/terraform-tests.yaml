@@ -49,7 +49,6 @@ jobs:
               - 'tests/**'
               - '*.tf'
               - '*.tfvars'
-              - 'modules/ec2/**'
               - '.github/workflows/terraform-tests.yaml'
             ec2:
               - 'modules/ec2/**'
@@ -91,12 +90,6 @@ jobs:
             echo "run_tests=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Node 24
-        if: steps.gate.outputs.run_tests == 'true'
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
       - name: Setup Terraform
         if: steps.gate.outputs.run_tests == 'true'
         uses: hashicorp/setup-terraform@v3
@@ -107,25 +100,8 @@ jobs:
       - name: Show versions
         if: steps.gate.outputs.run_tests == 'true'
         run: |
-          node --version
           terraform version
-
-      - name: Install npm dependencies
-        if: steps.gate.outputs.run_tests == 'true'
-        shell: bash
-        working-directory: ${{ matrix.workdir }}
-        run: |
-          set -euo pipefail
-
-          if [ -f package.json ]; then
-            npm ci
-          fi
-
-          if [ -f lambda/package.json ]; then
-            cd lambda
-            npm ci
-          fi
-
+          
       - name: Terraform fmt
         if: steps.gate.outputs.run_tests == 'true'
         working-directory: ${{ matrix.workdir }}

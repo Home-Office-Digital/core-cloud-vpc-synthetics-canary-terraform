@@ -4,13 +4,14 @@ variables {
   bucket_name         = "test-canary-bucket-example"
   environment         = "dev"
   name_prefix         = "canary-test"
+  vpc_id              = "vpc-12345678"
   subnet_ids          = ["subnet-12345678", "subnet-87654321"]
   security_group_ids  = ["sg-12345678"]
   target_ips          = ["10.0.1.10", "10.0.1.11"]
   allowed_ports       = ["443", "8443"]
-  denied_ports        = ["22", "3306"]
-  start_scan          = 1
-  scan_end            = 500
+  denied_ports        = ["25", "3306"]
+  start_scan          = "1"
+  scan_end            = "500"
   alert_on_open_ports = "false"
 }
 run "s3_security_defaults" {
@@ -122,7 +123,7 @@ run "iam_and_canary_config" {
   }
 
   assert {
-    condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["DENY_PORTS"] == "22,3306"
+    condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["DENY_PORTS"] == "25,3306"
     error_message = "Denied ports env var not rendered correctly."
   }
 }
