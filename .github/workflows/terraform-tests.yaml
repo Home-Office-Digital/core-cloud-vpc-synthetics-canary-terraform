@@ -9,7 +9,6 @@ on:
       - '**/*.tfvars'
       - '.github/workflows/terraform-tests.yaml'
   push:
-    branches: [main]
     paths:
       - 'modules/**'
       - 'tests/**'
