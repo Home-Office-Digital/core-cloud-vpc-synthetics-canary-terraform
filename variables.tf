@@ -36,6 +36,11 @@ variable "security_group_ids" {
 variable "target_ips" {
   description = "Comma-separated list of target IPs"
   type        = list(string)
+
+  validation {
+    condition     = length(var.target_ips) > 0
+    error_message = "target_ips must contain at least one IP address."
+  }
 }
 
 variable "allowed_ports" {
@@ -50,12 +55,22 @@ variable "denied_ports" {
 
 variable "start_scan" {
   description = "port numbers to start scanning from"
-  type        = string
+  type        = number
+
+  validation {
+    condition     = var.start_scan >= 1 && var.start_scan <= 65535
+    error_message = "start_scan must be between 1 and 65535."
+  }
 }
 
 variable "scan_end" {
   description = "port numbers to stop scanning"
-  type        = string
+  type        = number
+
+  validation {
+    condition     = var.scan_end >= 1 && var.scan_end <= 65535
+    error_message = "scan_end must be between 1 and 65535."
+  }
 }
 
 variable "alert_on_open_ports" {

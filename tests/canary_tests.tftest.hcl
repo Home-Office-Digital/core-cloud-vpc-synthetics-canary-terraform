@@ -10,9 +10,9 @@ variables {
   target_ips          = ["10.0.1.10", "10.0.1.11"]
   allowed_ports       = ["443", "8443"]
   denied_ports        = ["25", "3306"]
-  start_scan          = "1"
-  scan_end            = "500"
-  alert_on_open_ports = "false"
+  start_scan          = 1
+  scan_end            = 500
+  alert_on_open_ports = false
 }
 
 mock_provider "aws" {}
@@ -121,6 +121,11 @@ run "iam_and_canary_config" {
   }
 
   assert {
+    condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["TARGET_IPS"] == "10.0.1.10,10.0.1.11"
+    error_message = "Target IPs env var not rendered correctly."
+  }
+
+  assert {
     condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["ALLOW_PORTS"] == "443,8443"
     error_message = "Allowed ports env var not rendered correctly."
   }
@@ -128,5 +133,40 @@ run "iam_and_canary_config" {
   assert {
     condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["DENY_PORTS"] == "25,3306"
     error_message = "Denied ports env var not rendered correctly."
+  }
+
+  assert {
+    condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["ALERT_ON_OPEN_PORTS"] == "false"
+    error_message = "Alert on open ports env var must be rendered as a string boolean."
+  }
+}
+
+run "least_privilege_policies" {
+  command = plan
+
+  assert {
+    condition = (
+      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "xray:PutTraceSegments") &&
+      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "xray:PutTelemetryRecords") &&
+      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "logs:PutLogEvents")
+    )
+    error_message = "Canary runtime policy must include explicit tracing and logging actions."
+  }
+
+  assert {
+    condition = alltrue([
+      for action in flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]) :
+      !contains(["synthetics:*", "logs:*", "ec2:*"], action)
+    ])
+    error_message = "Canary runtime policy must avoid wildcard IAM actions."
+  }
+
+  assert {
+    condition = (
+      !strcontains(aws_kms_key.canary_bucket_cmk.policy, "kms:Update*") &&
+      !strcontains(aws_kms_key.sns_canary_cmk.policy, "kms:Update*") &&
+      !strcontains(aws_kms_key.cw_logs_cmk.policy, "kms:Update*")
+    )
+    error_message = "KMS key policies must not grant kms:Update* to service principals."
   }
 }

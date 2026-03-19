@@ -89,7 +89,6 @@ resource "aws_kms_key" "canary_bucket_cmk" {
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
           "kms:DescribeKey",
-          "kms:Update*",
         ]
         Resource = "*"
         Condition = {
@@ -123,30 +122,40 @@ resource "aws_iam_role" "canary_role" {
   tags = local.tags
 }
 
-resource "aws_iam_role_policy_attachment" "canary_policy" {
-  role       = aws_iam_role.canary_role.name
-  policy_arn = "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_policy" {
-  role       = aws_iam_role.canary_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
 resource "aws_iam_role_policy" "canary_vpc_policy" {
-  name = "${var.environment}-canary-vpc-policy"
+  name = "${var.environment}-canary-runtime-policy"
   role = aws_iam_role.canary_role.name
 
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
       {
+        Sid    = "AllowCanaryMetricsAndTracing"
+        Effect = "Allow",
+        Action = [
+          "cloudwatch:PutMetricData",
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ],
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCanaryLogs"
+        Effect = "Allow",
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Sid    = "AllowCanaryVpcNetworking"
         Effect = "Allow",
         Action = [
           "ec2:CreateNetworkInterface",
           "ec2:DescribeNetworkInterfaces",
-          "ec2:DeleteNetworkInterface",
-          "cloudwatch:PutMetricData"
+          "ec2:DeleteNetworkInterface"
         ],
         Resource = "*"
       }
@@ -213,13 +222,12 @@ resource "aws_synthetics_canary" "vpc_connectivity" {
 
   run_config {
     environment_variables = {
-
-      DEST_IP             = join(",", var.target_ips)
+      TARGET_IPS          = join(",", var.target_ips)
       ALLOW_PORTS         = join(",", var.allowed_ports)
       DENY_PORTS          = join(",", var.denied_ports)
-      SCAN_START          = var.start_scan
-      SCAN_END            = var.scan_end
-      ALERT_ON_OPEN_PORTS = var.alert_on_open_ports
+      SCAN_START          = tostring(var.start_scan)
+      SCAN_END            = tostring(var.scan_end)
+      ALERT_ON_OPEN_PORTS = tostring(var.alert_on_open_ports)
       CONNECT_TIMEOUT_MS  = "3000"
     }
   }

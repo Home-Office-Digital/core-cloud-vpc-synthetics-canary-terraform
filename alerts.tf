@@ -30,8 +30,7 @@ resource "aws_kms_key" "sns_canary_cmk" {
         }
         Action = [
           "kms:Encrypt",
-          "kms:GenerateDataKey",
-          "kms:Update*"
+          "kms:GenerateDataKey"
         ]
         Resource = "*"
       },
@@ -91,7 +90,6 @@ resource "aws_kms_key" "cw_logs_cmk" {
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
           "kms:DescribeKey",
-          "kms:Update*",
         ]
         Resource = "*"
       },
@@ -106,7 +104,6 @@ resource "aws_kms_key" "cw_logs_cmk" {
           "kms:Decrypt",
           "kms:Encrypt",
           "kms:DescribeKey",
-          "kms:Update*",
         ]
         Resource = "*"
       },
@@ -121,7 +118,6 @@ resource "aws_kms_key" "cw_logs_cmk" {
           "kms:Encrypt",
           "kms:GenerateDataKey*",
           "kms:DescribeKey",
-          "kms:Update*",
         ]
         Resource = "*"
       }
