@@ -5,16 +5,16 @@ on:
     paths:
       - 'modules/**'
       - 'tests/**'
-      - '*.tf'
-      - '*.tfvars'
+      - '**/*.tf'
+      - '**/*.tfvars'
       - '.github/workflows/terraform-tests.yaml'
   push:
     branches: [main]
     paths:
       - 'modules/**'
       - 'tests/**'
-      - '*.tf'
-      - '*.tfvars'
+      - '**/*.tf'
+      - '**/*.tfvars'
       - '.github/workflows/terraform-tests.yaml'
   workflow_dispatch:
 
