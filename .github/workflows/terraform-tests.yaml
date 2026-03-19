@@ -1,4 +1,4 @@
-name:  Terraform Tests
+name: Terraform Tests
 
 on:
   pull_request:
@@ -30,6 +30,8 @@ jobs:
       ec2_changed: ${{ steps.filter.outputs.ec2 }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Check changed files
         id: filter
@@ -38,12 +40,12 @@ jobs:
           filters: |
             root:
               - 'tests/**'
-              - '*.tf'
-              - '*.tfvars'
+              - '**/*.tf'
+              - '**/*.tfvars'
               - '.github/workflows/terraform-tests.yaml'
             ec2:
               - 'modules/ec2/**'
-              - '.github/workflows/terraform-tests.yaml'Expand commentComment on lines R47 to R54Resolved
+              - '.github/workflows/terraform-tests.yaml'
 
   test-scopes:
     name: ${{ matrix.emoji }} Test ${{ matrix.scope }}
@@ -62,6 +64,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Decide whether to run
         id: gate
@@ -69,10 +73,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          if [[ "${{ matrix.scope }}" == "root" ]]; then
+            echo "run_tests=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           CHANGED=false
           case "${{ matrix.scope }}" in
-            root) CHANGED="${{ needs.detect-changes.outputs.root_changed }}" ;;
-            ec2)  CHANGED="${{ needs.detect-changes.outputs.ec2_changed }}" ;;
+            ec2) CHANGED="${{ needs.detect-changes.outputs.ec2_changed }}" ;;
           esac
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$CHANGED" == "true" ]]; then
@@ -90,8 +98,7 @@ jobs:
 
       - name: Show versions
         if: steps.gate.outputs.run_tests == 'true'
-        run: |
-          terraform version
+        run: terraform version
 
       - name: Terraform fmt
         if: steps.gate.outputs.run_tests == 'true'
@@ -122,7 +129,7 @@ jobs:
       - name: Terraform test
         if: steps.gate.outputs.run_tests == 'true'
         working-directory: ${{ matrix.workdir }}
-        run: terraform test -no-color -verboseExpand commentComment on lines R109 to R133Resolved
+        run: terraform test -no-color -verbose
 
       - name: Mark skipped
         if: steps.gate.outputs.run_tests == 'false'
