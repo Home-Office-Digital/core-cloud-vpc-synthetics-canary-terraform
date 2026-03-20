@@ -40,8 +40,8 @@ jobs:
           filters: |
             root:
               - 'tests/**'
-              - '**/*.tf'
-              - '**/*.tfvars'
+              - './*.tf'
+              - './*.tfvars'
               - '.github/workflows/terraform-tests.yaml'
             ec2:
               - 'modules/ec2/**'
@@ -58,9 +58,15 @@ jobs:
           - scope: root
             workdir: .
             emoji: "🏠"
+            changed: ${{ needs.detect-changes.outputs.root_changed }}
           - scope: ec2
             workdir: modules/ec2
             emoji: "🧪"
+            changed: ${{ needs.detect-changes.outputs.ec2_changed }}
+
+    defaults:
+      run:
+        working-directory: ${{ matrix.workdir }}
 
     steps:
       - uses: actions/checkout@v5
@@ -72,16 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          if [[ "${{ matrix.scope }}" == "root" ]]; then
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          CHANGED=false
-          case "${{ matrix.scope }}" in
-            ec2) CHANGED="${{ needs.detect-changes.outputs.ec2_changed }}" ;;
-          esac
+          CHANGED='${{ matrix.changed }}'
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" || "$CHANGED" == "true" ]]; then
             echo "run_tests=true" >> "$GITHUB_OUTPUT"
@@ -102,23 +99,19 @@ jobs:
 
       - name: Terraform fmt
         if: steps.gate.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.workdir }}
         run: terraform fmt -check -recursive
 
       - name: Terraform init
         if: steps.gate.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.workdir }}
         run: terraform init -backend=false
 
       - name: Terraform validate
         if: steps.gate.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.workdir }}
         run: terraform validate -no-color
 
       - name: Block apply-based tests
         if: steps.gate.outputs.run_tests == 'true'
         shell: bash
-        working-directory: ${{ matrix.workdir }}
         run: |
           set -euo pipefail
           if [ -d tests ] && grep -R --line-number --include="*.tftest.hcl" 'command *= *apply' tests/; then
@@ -128,7 +121,6 @@ jobs:
 
       - name: Terraform test
         if: steps.gate.outputs.run_tests == 'true'
-        working-directory: ${{ matrix.workdir }}
         run: terraform test -no-color -verbose
 
       - name: Mark skipped
