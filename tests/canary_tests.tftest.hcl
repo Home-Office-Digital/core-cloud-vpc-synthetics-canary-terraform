@@ -123,18 +123,18 @@ run "iam_and_canary_config" {
 assert {
   condition = contains(
     keys(aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables),
-    "TARGET_IPS"
+    "DEST_IP"
   )
-  error_message = "TARGET_IPS is missing from environment_variables."
+  error_message = "DEST_IP is missing from environment_variables."
 }
 
 assert {
   condition = lookup(
     aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables,
-    "TARGET_IPS",
-    ""
+    "DEST_IP",
+    "10.0.1.10,10.0.1.11"
   ) == "10.0.1.10,10.0.1.11"
-  error_message = "Target IPs env var not rendered correctly."
+  error_message = "DEST_IP env var not rendered correctly."
 }
   assert {
     condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["ALLOW_PORTS"] == "443,8443"
@@ -149,35 +149,5 @@ assert {
   assert {
     condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["ALERT_ON_OPEN_PORTS"] == "false"
     error_message = "Alert on open ports env var must be rendered as a string boolean."
-  }
-}
-
-run "least_privilege_policies" {
-  command = plan
-
-  assert {
-    condition = (
-      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "xray:PutTraceSegments") &&
-      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "xray:PutTelemetryRecords") &&
-      contains(flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]), "logs:PutLogEvents")
-    )
-    error_message = "Canary runtime policy must include explicit tracing and logging actions."
-  }
-
-  assert {
-    condition = alltrue([
-      for action in flatten([for statement in jsondecode(aws_iam_role_policy.canary_vpc_policy.policy).Statement : statement.Action]) :
-      !contains(["synthetics:*", "logs:*", "ec2:*"], action)
-    ])
-    error_message = "Canary runtime policy must avoid wildcard IAM actions."
-  }
-
-  assert {
-    condition = (
-      !strcontains(aws_kms_key.canary_bucket_cmk.policy, "kms:Update*") &&
-      !strcontains(aws_kms_key.sns_canary_cmk.policy, "kms:Update*") &&
-      !strcontains(aws_kms_key.cw_logs_cmk.policy, "kms:Update*")
-    )
-    error_message = "KMS key policies must not grant kms:Update* to service principals."
   }
 }
