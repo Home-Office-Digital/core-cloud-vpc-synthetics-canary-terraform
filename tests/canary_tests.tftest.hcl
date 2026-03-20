@@ -120,22 +120,22 @@ run "iam_and_canary_config" {
     error_message = "Canary connect timeout must be 3000ms."
   }
 
-assert {
-  condition = contains(
-    keys(aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables),
-    "DEST_IP"
-  )
-  error_message = "DEST_IP is missing from environment_variables."
-}
+  assert {
+    condition = contains(
+      keys(aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables),
+      "DEST_IP"
+    )
+    error_message = "DEST_IP is missing from environment_variables."
+  }
 
-assert {
-  condition = lookup(
-    aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables,
-    "DEST_IP",
-    "10.0.1.10,10.0.1.11"
-  ) == "10.0.1.10,10.0.1.11"
-  error_message = "DEST_IP env var not rendered correctly."
-}
+  assert {
+    condition = lookup(
+      aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables,
+      "DEST_IP",
+      "10.0.1.10,10.0.1.11"
+    ) == "10.0.1.10,10.0.1.11"
+    error_message = "DEST_IP env var not rendered correctly."
+  }
   assert {
     condition     = aws_synthetics_canary.vpc_connectivity.run_config[0].environment_variables["ALLOW_PORTS"] == "443,8443"
     error_message = "Allowed ports env var not rendered correctly."
