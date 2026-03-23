@@ -151,3 +151,93 @@ run "iam_and_canary_config" {
     error_message = "Alert on open ports env var must be rendered as a string boolean."
   }
 }
+
+run "alerts_and_slack_forwarder_config" {
+  command = plan
+
+  assert {
+    condition     = aws_sns_topic.canary_alerts.name == "dev-canary-alerts"
+    error_message = "SNS topic name should include environment prefix."
+  }
+
+  assert {
+    condition     = aws_sqs_queue.slack_forwarder_dlq.message_retention_seconds == 1209600
+    error_message = "Slack forwarder DLQ retention must be 14 days."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_log_group.slack_forwarder.retention_in_days == 365
+    error_message = "Slack forwarder log group retention must be 365 days."
+  }
+
+  assert {
+    condition     = aws_lambda_function.slack_forwarder.handler == "slack_forwarder.lambda_handler"
+    error_message = "Slack forwarder handler is incorrect."
+  }
+
+  assert {
+    condition     = aws_lambda_function.slack_forwarder.runtime == "python3.11"
+    error_message = "Slack forwarder runtime must be python3.11."
+  }
+
+  assert {
+    condition     = aws_lambda_function.slack_forwarder.timeout == 10
+    error_message = "Slack forwarder timeout must be 10 seconds."
+  }
+
+  assert {
+    condition     = aws_lambda_function.slack_forwarder.memory_size == 128
+    error_message = "Slack forwarder memory size must be 128 MB."
+  }
+
+  assert {
+    condition     = aws_lambda_function.slack_forwarder.reserved_concurrent_executions == 2
+    error_message = "Slack forwarder reserved concurrency must be 2."
+  }
+
+  assert {
+    condition = contains(
+      keys(aws_lambda_function.slack_forwarder.environment[0].variables),
+      "SLACK_WEBHOOK_URL"
+    )
+    error_message = "SLACK_WEBHOOK_URL should be set when slack_secret_arn is empty."
+  }
+
+  assert {
+    condition = !contains(
+      keys(aws_lambda_function.slack_forwarder.environment[0].variables),
+      "SLACK_SECRET_ARN"
+    )
+    error_message = "SLACK_SECRET_ARN must not be set when slack_secret_arn is empty."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.allow_sns.principal == "sns.amazonaws.com"
+    error_message = "Lambda invoke permission must be scoped to SNS principal."
+  }
+
+  assert {
+    condition     = aws_lambda_permission.allow_sns.action == "lambda:InvokeFunction"
+    error_message = "Lambda invoke permission action must be lambda:InvokeFunction."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.canary_failed.metric_name == "Failed"
+    error_message = "Canary failure alarm must monitor Failed metric."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.canary_failed.comparison_operator == "GreaterThanThreshold"
+    error_message = "Canary failure alarm comparison operator is incorrect."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.canary_failed.threshold == 0
+    error_message = "Canary failure alarm threshold must be 0."
+  }
+
+  assert {
+    condition     = aws_cloudwatch_metric_alarm.canary_failed.treat_missing_data == "notBreaching"
+    error_message = "Canary failure alarm should treat missing data as notBreaching."
+  }
+}

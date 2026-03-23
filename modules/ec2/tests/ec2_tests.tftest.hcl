@@ -43,8 +43,38 @@ run "ec2_defaults_plan" {
   }
 
   assert {
+    condition     = aws_instance.this[0].metadata_options[0].http_endpoint == "enabled"
+    error_message = "Instance metadata endpoint must stay enabled."
+  }
+
+  assert {
+    condition     = aws_instance.this[0].ebs_optimized == true
+    error_message = "EBS optimization must be enabled."
+  }
+
+  assert {
+    condition     = aws_instance.this[0].iam_instance_profile == "EC2-Default-SSM-AD-Role"
+    error_message = "Unexpected IAM instance profile attached to EC2."
+  }
+
+  assert {
     condition     = aws_instance.this[0].root_block_device[0].encrypted == true
     error_message = "Root volume must be encrypted."
+  }
+
+  assert {
+    condition     = aws_instance.this[0].root_block_device[0].volume_type == "gp3"
+    error_message = "Root volume must use gp3."
+  }
+
+  assert {
+    condition     = aws_instance.this[0].tags["Name"] == "ec2-test"
+    error_message = "Instance Name tag must match instance_name."
+  }
+
+  assert {
+    condition     = aws_security_group.this[0].tags["Name"] == "ec2-test-sg"
+    error_message = "Security group Name tag must match security_group_name."
   }
 
   assert {
@@ -60,6 +90,69 @@ run "ec2_defaults_plan" {
   assert {
     condition     = aws_security_group_rule.egress["0"].from_port == 443 && aws_security_group_rule.egress["0"].to_port == 443 && aws_security_group_rule.egress["0"].protocol == "tcp"
     error_message = "Default egress rule must allow HTTPS only."
+  }
+
+  assert {
+    condition     = aws_security_group_rule.egress["0"].cidr_blocks == ["0.0.0.0/0"]
+    error_message = "Default egress CIDR must be 0.0.0.0/0."
+  }
+}
+
+run "ec2_custom_rules_plan" {
+  command = plan
+
+  variables {
+    ingress_rules = [
+      {
+        description = "Allow HTTPS from corp network"
+        from_port   = 443
+        to_port     = 443
+        protocol    = "tcp"
+        cidr_blocks = ["10.0.0.0/8"]
+      }
+    ]
+
+    egress_rules = [
+      {
+        description = "Allow HTTPS"
+        from_port   = 443
+        to_port     = 443
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+      },
+      {
+        description = "Allow DNS"
+        from_port   = 53
+        to_port     = 53
+        protocol    = "udp"
+        cidr_blocks = ["10.0.0.2/32"]
+      }
+    ]
+  }
+
+  assert {
+    condition     = length(aws_security_group_rule.ingress) == 1
+    error_message = "Expected one custom ingress rule."
+  }
+
+  assert {
+    condition     = aws_security_group_rule.ingress["0"].from_port == 443 && aws_security_group_rule.ingress["0"].to_port == 443 && aws_security_group_rule.ingress["0"].protocol == "tcp"
+    error_message = "Custom ingress rule was not rendered correctly."
+  }
+
+  assert {
+    condition     = aws_security_group_rule.ingress["0"].cidr_blocks == ["10.0.0.0/8"]
+    error_message = "Custom ingress CIDR was not rendered correctly."
+  }
+
+  assert {
+    condition     = length(aws_security_group_rule.egress) == 2
+    error_message = "Expected two custom egress rules."
+  }
+
+  assert {
+    condition     = aws_security_group_rule.egress["1"].from_port == 53 && aws_security_group_rule.egress["1"].to_port == 53 && aws_security_group_rule.egress["1"].protocol == "udp"
+    error_message = "Custom DNS egress rule was not rendered correctly."
   }
 }
 
