@@ -93,7 +93,7 @@ run "ec2_defaults_plan" {
   }
 
   assert {
-    condition     = aws_security_group_rule.egress["0"].cidr_blocks == ["0.0.0.0/0"]
+    condition     = length(aws_security_group_rule.egress["0"].cidr_blocks) == 1 && contains(aws_security_group_rule.egress["0"].cidr_blocks, "0.0.0.0/0")
     error_message = "Default egress CIDR must be 0.0.0.0/0."
   }
 }
@@ -141,7 +141,7 @@ run "ec2_custom_rules_plan" {
   }
 
   assert {
-    condition     = aws_security_group_rule.ingress["0"].cidr_blocks == ["10.0.0.0/8"]
+    condition     = length(aws_security_group_rule.ingress["0"].cidr_blocks) == 1 && contains(aws_security_group_rule.ingress["0"].cidr_blocks, "10.0.0.0/8")
     error_message = "Custom ingress CIDR was not rendered correctly."
   }
 
