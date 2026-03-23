@@ -1,9 +1,9 @@
 variables {
-  dest_vpc_id     = "vpc-12345678"
-  dest_subnet_id  = "subnet-12345678"
-  instance_type   = "t3.micro"
-  instance_name   = "ec2-test"
-  security_group_name = "ec2-test-sg"
+  dest_vpc_id           = "vpc-12345678"
+  dest_subnet_id        = "subnet-12345678"
+  instance_type         = "t3.micro"
+  instance_name         = "ec2-test"
+  security_group_name   = "ec2-test-sg"
   instance_profile_name = "EC2-Default-SSM-AD-Role"
 }
 
