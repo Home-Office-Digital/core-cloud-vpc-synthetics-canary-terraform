@@ -13,6 +13,7 @@ variables {
   start_scan          = 1
   scan_end            = 500
   alert_on_open_ports = false
+  slack_webhook_url   = "https://example.invalid/slack-webhook"
 }
 
 mock_provider "aws" {}

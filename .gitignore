@@ -43,7 +43,10 @@ terraform.rc
 
 *.zip
 *.py.zip
+lambda/__pycache__/*
+lambda/__pycache__
 **/*.zip
 lambda/*.zip
+lambda/*.pyc
 build/*.zip
 lambda/slack_forwarder.py.zip

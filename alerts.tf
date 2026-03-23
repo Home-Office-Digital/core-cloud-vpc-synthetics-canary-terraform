@@ -343,5 +343,6 @@ resource "aws_cloudwatch_metric_alarm" "canary_failed" {
   treat_missing_data = "notBreaching"
 
   alarm_actions = [aws_sns_topic.canary_alerts.arn]
+  ok_actions    = [aws_sns_topic.canary_alerts.arn]
   tags          = local.tags
 }

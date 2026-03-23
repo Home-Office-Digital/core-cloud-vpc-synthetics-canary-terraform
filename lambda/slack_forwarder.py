@@ -2,33 +2,42 @@ import os
 import json
 import urllib.request
 import urllib.error
+import urllib.parse
 import logging
 import traceback
 import boto3
+from botocore.config import Config
 from datetime import datetime, timezone
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+AWS_CLIENT_CONFIG = Config(connect_timeout=5, read_timeout=10)
+SECRETSMANAGER_CLIENT = boto3.client("secretsmanager", config=AWS_CLIENT_CONFIG)
+
 
 def _resolve_webhook_url() -> str | None:
-    webhook = os.environ.get("SLACK_WEBHOOK_URL")
+    webhook = (os.environ.get("SLACK_WEBHOOK_URL") or "").strip()
     if webhook:
-        return webhook
+        parsed = urllib.parse.urlparse(webhook)
+        if parsed.scheme == "https" and parsed.netloc:
+            return webhook
+        logger.error("SLACK_WEBHOOK_URL is set but not a valid https URL")
+        return None
 
     secret_arn = os.environ.get("SLACK_SECRET_ARN")
     if not secret_arn:
         return None
 
     try:
-        sm = boto3.client("secretsmanager")
-        resp = sm.get_secret_value(SecretId=secret_arn)
+        resp = SECRETSMANAGER_CLIENT.get_secret_value(SecretId=secret_arn)
         secret_str = resp.get("SecretString")
         if not secret_str:
             logger.error("SecretString is empty for SLACK_SECRET_ARN")
             return None
 
         # Support either a raw webhook string or a JSON object containing it.
+        secret_str = secret_str.strip()
         if secret_str.startswith("https://"):
             return secret_str
 
@@ -65,10 +74,6 @@ def send_slack(webhook: str, payload: dict):
     except Exception:
         logger.error(traceback.format_exc())
         return False
-
-# SNS helpers
-def extract_sns_message(record: dict) -> str:
-    return record.get("Sns", {}).get("Message", "")
 
 def parse_event_context(record: dict) -> dict:
     context = {
@@ -140,7 +145,7 @@ def _fmt_ts(iso_ts: str):
         return iso_ts
 
 # Slack message builder (CLEAN)
-def format_slack_message(raw: str, ctx: dict) -> dict:
+def format_slack_message(ctx: dict) -> dict:
     status = (ctx.get("stateValue") or "ALARM").upper()
     alarm = ctx.get("alarmName") or "Unknown Alarm"
     region = ctx.get("region") or "unknown"
@@ -197,9 +202,8 @@ def lambda_handler(event, context):
 
     failed = 0
     for record in event.get("Records", []):
-        raw = extract_sns_message(record)
         ctx = parse_event_context(record)
-        msg = format_slack_message(raw, ctx)
+        msg = format_slack_message(ctx)
         ok = send_slack(webhook, msg)
         if not ok:
             failed += 1

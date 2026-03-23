@@ -67,10 +67,20 @@ variable "slack_webhook_url" {
   default     = ""
   sensitive   = true
   description = "Slack webhook URL (use slack_secret_arn instead for production)"
+
+  validation {
+    condition     = var.slack_webhook_url == "" || can(regex("^https://", var.slack_webhook_url))
+    error_message = "slack_webhook_url must be an https URL when provided."
+  }
 }
 
 variable "slack_secret_arn" {
   type        = string
   default     = ""
   description = "Secrets Manager ARN that stores Slack webhook"
+
+  validation {
+    condition     = var.slack_secret_arn != "" || var.slack_webhook_url != ""
+    error_message = "Set either slack_webhook_url or slack_secret_arn so Slack notifications can be sent."
+  }
 }
