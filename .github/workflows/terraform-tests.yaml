@@ -1,0 +1,119 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'tests/**'
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform-tests.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'modules/**'
+      - 'tests/**'
+      - '*.tf'
+      - '*.tfvars'
+      - '.github/workflows/terraform-tests.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_VERSION: "1.13.4"
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      root_changed: ${{ steps.changes.outputs.root_changed }}
+      ec2_changed: ${{ steps.changes.outputs.ec2_changed }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            git diff --name-only \
+              "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" > changed_files.txt
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            git diff --name-only \
+              "${{ github.event.before }}" \
+              "${{ github.sha }}" > changed_files.txt
+          else
+            : > changed_files.txt
+          fi
+
+          root_changed=false
+          ec2_changed=false
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+
+            case "$file" in
+              .github/workflows/terraform-tests.yaml)
+                root_changed=true
+                ec2_changed=true
+                ;;
+              tests/*|*.tf|*.tfvars)
+                if [[ "$file" == modules/ec2/* ]]; then
+                  ec2_changed=true
+                elif [[ "$file" != modules/* ]]; then
+                  root_changed=true
+                else
+                  root_changed=true
+                fi
+                ;;
+              modules/ec2/*)
+                ec2_changed=true
+                ;;
+            esac
+          done < changed_files.txt
+
+          echo "root_changed=$root_changed" >> "$GITHUB_OUTPUT"
+          echo "ec2_changed=$ec2_changed" >> "$GITHUB_OUTPUT"
+
+  test-root:
+    needs: detect-changes
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.root_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@6eb9b2a22389a3419646e3b001ce90f51666e817
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+      - run: terraform test -no-color -verbose
+
+  test-ec2:
+    needs: detect-changes
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.ec2_changed == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: modules/ec2
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@6eb9b2a22389a3419646e3b001ce90f51666e817
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+      - run: terraform test -no-color -verbose
