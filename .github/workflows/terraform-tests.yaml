@@ -65,14 +65,17 @@ jobs:
                 root_changed=true
                 ec2_changed=true
                 ;;
+              tests/*|*.tf|*.tfvars)
+                if [[ "$file" == modules/ec2/* ]]; then
+                  ec2_changed=true
+                elif [[ "$file" != modules/* ]]; then
+                  root_changed=true
+                else
+                  root_changed=true
+                fi
+                ;;
               modules/ec2/*)
                 ec2_changed=true
-                ;;
-              modules/*)
-                root_changed=true
-                ;;
-              tests/*|*.tf|*.tfvars)
-                root_changed=true
                 ;;
             esac
           done < changed_files.txt
@@ -80,27 +83,10 @@ jobs:
           echo "root_changed=$root_changed" >> "$GITHUB_OUTPUT"
           echo "ec2_changed=$ec2_changed" >> "$GITHUB_OUTPUT"
 
-  test-modules:
-    name: Test ${{ matrix.module }}
+  test-root:
     needs: detect-changes
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.root_changed == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - module: root
-            workdir: .
-            changed: ${{ needs.detect-changes.outputs.root_changed }}
-            emoji: "🏠"
-          - module: ec2
-            workdir: modules/ec2
-            changed: ${{ needs.detect-changes.outputs.ec2_changed }}
-            emoji: "🖥️"
-
-    defaults:
-      run:
-        working-directory: ${{ matrix.workdir }}
-
     steps:
       - uses: actions/checkout@v5
 
@@ -108,278 +94,26 @@ jobs:
         with:
           terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Decide whether to run tests
-        id: gate
-        shell: bash
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ matrix.changed }}" == "true" ]]; then
-            echo "run_tests=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_tests=false" >> "$GITHUB_OUTPUT"
-          fi
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+      - run: terraform test -no-color -verbose
 
-      - name: Terraform fmt
-        if: steps.gate.outputs.run_tests == 'true'
-        run: terraform fmt -check -recursive
-
-      - name: Terraform init
-        if: steps.gate.outputs.run_tests == 'true'
-        run: terraform init -backend=false
-
-      - name: Terraform validate
-        if: steps.gate.outputs.run_tests == 'true'
-        run: terraform validate -no-color
-
-      - name: Terraform test
-        id: test
-        if: steps.gate.outputs.run_tests == 'true'
-        shell: bash
-        run: |
-          set -o pipefail
-          terraform test -no-color -verbose 2>&1 | tee test-results.log
-          sed 's/\x1b\[[0-9;]*m//g' test-results.log > test-results.clean.log
-
-      - name: Record Module Status
-        if: always()
-        shell: bash
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/status"
-          STATUS="skipped"
-
-          if [[ "${{ steps.gate.outputs.run_tests }}" == "true" ]]; then
-            if [[ "${{ steps.test.outcome }}" == "success" ]]; then
-              STATUS="success"
-            else
-              STATUS="failure"
-            fi
-          fi
-
-          echo "{\"module\":\"${{ matrix.module }}\",\"status\":\"$STATUS\"}" > "$GITHUB_WORKSPACE/status/${{ matrix.module }}.json"
-
-      - name: Upload Module Status
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: module-status-${{ matrix.module }}
-          path: ${{ github.workspace }}/status/${{ matrix.module }}.json
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: Write Job Summary
-        if: always() && steps.gate.outputs.run_tests == 'true'
-        shell: bash
-        run: |
-          echo "## ${{ matrix.emoji }} ${{ matrix.module }} Module Test Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [[ -f test-results.clean.log ]]; then
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -50 test-results.clean.log >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "_No test log found._" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Upload Test Artifacts
-        if: always() && steps.gate.outputs.run_tests == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.module }}-test-results
-          path: |
-            ${{ matrix.workdir }}/test-results.log
-            ${{ matrix.workdir }}/test-results.clean.log
-          retention-days: 30
-          if-no-files-found: warn
-
-      - name: Comment PR with Results (sticky)
-        if: github.event_name == 'pull_request' && always() && steps.gate.outputs.run_tests == 'true'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const marker = `<!-- tf-tests-${{ matrix.module }}-results -->`;
-            const path = `${{ matrix.workdir }}/test-results.clean.log`;
-
-            if (!fs.existsSync(path)) {
-              console.log('No clean test log found; skipping comment');
-              return;
-            }
-
-            const text = fs.readFileSync(path, 'utf8');
-            const passed = '${{ steps.test.outcome }}' === 'success';
-            const icon = passed ? '✅' : '❌';
-
-            const body = `${marker}
-            ## ${icon} ${{ matrix.module }} Module Test Results
-
-            <details>
-            <summary>📋 Test Output (tail)</summary>
-
-            \`\`\`
-            ${text.slice(-6000)}
-            \`\`\`
-
-            </details>
-
-            - **Status**: ${passed ? 'success' : 'failure'}
-            - **Terraform Version**: ${{ env.TF_VERSION }}
-            - **Module Path**: \`${{ matrix.workdir }}\`
-            `;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-
-            const existing = comments.find(
-              c => c.user?.type === 'Bot' && c.body?.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-
-      - name: Mark Skipped
-        if: steps.gate.outputs.run_tests == 'false'
-        shell: bash
-        run: |
-          echo "No relevant changes for ${{ matrix.module }} (skipping)."
-          echo "## ⏭️ ${{ matrix.module }} Module Tests" >> "$GITHUB_STEP_SUMMARY"
-          echo "_No changes detected in \`${{ matrix.workdir }}\`._" >> "$GITHUB_STEP_SUMMARY"
-
-  test-summary:
-    name: Test Summary & Quality Gate
-    needs: [test-modules]
-    if: always()
+  test-ec2:
+    needs: detect-changes
+    if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.ec2_changed == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      overall: ${{ steps.summary.outputs.overall }}
-
+    defaults:
+      run:
+        working-directory: modules/ec2
     steps:
-      - name: Download Status Artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+
+      - uses: hashicorp/setup-terraform@6eb9b2a22389a3419646e3b001ce90f51666e817
         with:
-          pattern: module-status-*
-          merge-multiple: true
-          path: status
+          terraform_version: ${{ env.TF_VERSION }}
 
-      - name: Generate Summary
-        id: summary
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          echo "# 🎯 Terraform Module Test Summary" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| Module | Status |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|--------|--------|" >> "$GITHUB_STEP_SUMMARY"
-
-          OVERALL="success"
-          found_files=0
-
-          shopt -s nullglob
-          for file in status/*.json; do
-            found_files=1
-            module=$(jq -r '.module' "$file")
-            status=$(jq -r '.status' "$file")
-
-            case "$status" in
-              success) icon="✅ success" ;;
-              failure) icon="❌ failure"; OVERALL="failure" ;;
-              skipped) icon="⏭️ skipped" ;;
-              *) icon="❓ unknown"; OVERALL="failure" ;;
-            esac
-
-            echo "| $module | $icon |" >> "$GITHUB_STEP_SUMMARY"
-          done
-
-          if [[ "$found_files" -eq 0 ]]; then
-            echo "| none | ❌ no status artifacts found |" >> "$GITHUB_STEP_SUMMARY"
-            OVERALL="failure"
-          fi
-
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-
-          if [[ "$OVERALL" == "failure" ]]; then
-            echo "## ⛔ Quality Gate: FAILED" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "One or more module test suites failed, or status artifacts were missing." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## ✅ Quality Gate: PASSED" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "All required module tests passed successfully." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-          echo "overall=$OVERALL" >> "$GITHUB_OUTPUT"
-
-      - name: Sticky PR Summary Comment
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- tf-tests-overall-summary -->';
-            const summary = fs.readFileSync(process.env.GITHUB_STEP_SUMMARY, 'utf8');
-            const overall = '${{ steps.summary.outputs.overall }}';
-            const icon = overall === 'success' ? '✅' : '❌';
-
-            const body = `${marker}
-            ## ${icon} Terraform Module Test Summary
-
-            ${summary}
-
-            > This comment is automatically updated on each push.`;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              per_page: 100,
-            });
-
-            const existing = comments.find(
-              c => c.user?.type === 'Bot' && c.body?.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
-
-  quality-gate:
-    name: Quality Gate (Required Check)
-    needs: [test-summary]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Enforce Quality Gate
-        run: |
-          if [[ "${{ needs.test-summary.outputs.overall }}" != "success" ]]; then
-            echo "::error::Quality gate failed - one or more module tests failed"
-            exit 1
-          fi
-          echo "::notice::✅ Quality gate passed - all required tests successful"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false
+      - run: terraform validate -no-color
+      - run: terraform test -no-color -verbose
