@@ -69,8 +69,8 @@ variable "slack_webhook_url" {
   description = "Slack webhook URL (use slack_secret_arn instead for production)"
 
   validation {
-    condition     = var.slack_webhook_url == "" || can(regex("^https://", var.slack_webhook_url))
-    error_message = "slack_webhook_url must be an https URL when provided."
+    condition     = var.slack_webhook_url == "" || can(regex("^https://[^/]+(/.*)?$", var.slack_webhook_url))
+    error_message = "slack_webhook_url must be a valid https URL with a host when provided."
   }
 }
 
