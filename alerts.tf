@@ -265,7 +265,9 @@ resource "aws_cloudwatch_log_group" "slack_forwarder" {
 }
 
 resource "aws_lambda_function" "slack_forwarder" {
-  filename                       = data.archive_file.slack_zip.output_path
+  filename         = data.archive_file.slack_zip.output_path
+  source_code_hash = data.archive_file.slack_zip.output_base64sha256
+
   function_name                  = local.slack_forwarder_name
   handler                        = "slack_forwarder.lambda_handler"
   role                           = aws_iam_role.slack_lambda_role.arn
@@ -289,8 +291,7 @@ resource "aws_lambda_function" "slack_forwarder" {
     security_group_ids = var.security_group_ids
   }
 
-  source_code_hash = fileexists(data.archive_file.slack_zip.output_path) ? filebase64sha256(data.archive_file.slack_zip.output_path) : null
-  tags             = local.tags
+  tags = local.tags
 
   tracing_config {
     mode = "Active"
