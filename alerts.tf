@@ -137,7 +137,7 @@ resource "aws_kms_alias" "sns_canary_alias" {
 # SNS Topic (encrypted)
 resource "aws_sns_topic" "canary_alerts" {
   name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
+  kms_master_key_id = aws_kms_key.sns_canary_cmk.arn
   tags              = local.tags
 }
 
@@ -156,8 +156,16 @@ data "aws_iam_policy_document" "canary_alerts_topic_policy" {
 
     condition {
       test     = "StringEquals"
-      variable = "AWS:SourceAccount"
+      variable = "aws:SourceAccount"
       values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values = [
+        "arn:aws:cloudwatch:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alarm:*"
+      ]
     }
   }
 }
