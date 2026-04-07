@@ -79,7 +79,7 @@ resource "aws_kms_key" "cw_logs_cmk" {
         Sid    = "AllowCloudWatchLogsUse"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -164,7 +164,7 @@ data "aws_iam_policy_document" "canary_alerts_topic_policy" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values = [
-        "arn:aws:cloudwatch:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:alarm:*"
+        "arn:aws:cloudwatch:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:alarm:*"
       ]
     }
   }
