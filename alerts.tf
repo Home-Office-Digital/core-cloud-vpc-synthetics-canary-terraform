@@ -221,7 +221,7 @@ resource "aws_iam_role_policy" "slack_secret_policy" {
 data "archive_file" "slack_zip" {
   type        = "zip"
   source_file = "${path.module}/lambda/slack_forwarder.py"
-  output_path = "${path.module}/build/slack_forwarder.zip"
+  output_path = "${path.module}/slack_forwarder.zip"
 }
 
 resource "aws_signer_signing_profile" "slack_forwarder" {

@@ -178,7 +178,7 @@ resource "aws_iam_role_policy" "canary_s3_access" {
 data "archive_file" "canary_zip" {
   type        = "zip"
   source_file = "${path.module}/connectivity_check.js"
-  output_path = "${path.module}/build/connectivity_check.js.zip"
+  output_path = "${path.module}/connectivity_check.js.zip"
 }
 
 resource "aws_s3_object" "canary_script" {
