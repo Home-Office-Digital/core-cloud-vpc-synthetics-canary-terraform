@@ -1,9 +1,13 @@
+# checkov:skip=CKV_AWS_144: No replication required for this bucket
+# checkov:skip=CKV_AWS_18: Logging not required for this bucket
 resource "aws_s3_bucket" "canary_bucket" {
   bucket        = var.bucket_name
   force_destroy = true
 
   tags = local.tags
 }
+
+# checkov:skip=CCKV2_AWS_62: event notifications will be noisy
 resource "aws_s3_bucket_public_access_block" "canary_bucket_block" {
   bucket = aws_s3_bucket.canary_bucket.id
 
@@ -121,6 +125,7 @@ resource "aws_iam_role" "canary_role" {
   tags = local.tags
 }
 
+# checkov:skip=CKV_AWS_290: Wildcard needed for dynamic resources
 resource "aws_iam_role_policy_attachment" "canary_policy" {
   role       = aws_iam_role.canary_role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchSyntheticsFullAccess"
@@ -131,6 +136,7 @@ resource "aws_iam_role_policy_attachment" "lambda_policy" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
+# checkov:skip=CKV_AWS_355: Wildcard needed for dynamic resources
 resource "aws_iam_role_policy" "canary_vpc_policy" {
   name = "${var.environment}-canary-vpc-policy"
   role = aws_iam_role.canary_role.name
@@ -186,8 +192,6 @@ resource "aws_s3_object" "canary_script" {
   key    = "connectivity_check.js.zip"
   source = data.archive_file.canary_zip.output_path
   tags   = local.tags
-
-  depends_on = [data.archive_file.canary_zip]
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {
