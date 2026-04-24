@@ -2,6 +2,7 @@
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
+# KMS key for encrypted SNS canary alerts
 resource "aws_kms_key" "sns_canary_cmk" {
   description             = "CMK for encrypting SNS topic: ${var.environment}-canary-alerts"
   enable_key_rotation     = true
@@ -10,7 +11,6 @@ resource "aws_kms_key" "sns_canary_cmk" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Account root admin
       {
         Sid    = "AllowAccountAdminsFullControl"
         Effect = "Allow"
@@ -20,33 +20,29 @@ resource "aws_kms_key" "sns_canary_cmk" {
         Action   = "kms:*"
         Resource = "*"
       },
-
-      # CloudWatch Alarms (required)
       {
-        Sid    = "AllowCloudWatchToUseKey"
+        Sid    = "AllowCloudWatchAlarmsToUseKey"
         Effect = "Allow"
         Principal = {
           Service = "cloudwatch.amazonaws.com"
         }
         Action = [
-          "kms:Encrypt",
-          "kms:GenerateDataKey",
-          "kms:Update*"
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       },
-
-      # SNS service (required)
       {
-        Sid    = "AllowSNSToUseKey"
+        Sid    = "AllowSNSServiceToUseKey"
         Effect = "Allow"
         Principal = {
           Service = "sns.amazonaws.com"
         }
         Action = [
           "kms:Decrypt",
-          "kms:Encrypt",
-          "kms:GenerateDataKey"
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
         Condition = {
@@ -57,10 +53,11 @@ resource "aws_kms_key" "sns_canary_cmk" {
       }
     ]
   })
+
   tags = local.tags
 }
 
-# KMS key for CloudWatch Logs + SQS DLQ (+ optional Lambda env encryption)
+# KMS key for CloudWatch Logs + SQS DLQ + Lambda env encryption
 resource "aws_kms_key" "cw_logs_cmk" {
   description             = "CMK for CloudWatch Logs + Slack forwarder DLQ (${var.environment})"
   enable_key_rotation     = true
@@ -69,59 +66,55 @@ resource "aws_kms_key" "cw_logs_cmk" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Account root admin
       {
-        Sid       = "AllowAccountAdminsFullControl"
-        Effect    = "Allow"
-        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
-        Action    = "kms:*"
-        Resource  = "*"
+        Sid    = "AllowAccountAdminsFullControl"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
       },
-
-      # CloudWatch Logs service principal for this region (for log group encryption)
       {
         Sid    = "AllowCloudWatchLogsUse"
         Effect = "Allow"
         Principal = {
-          Service = "logs.${data.aws_region.current.id}.amazonaws.com"
+          Service = "logs.${data.aws_region.current.region}.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
           "kms:Decrypt",
           "kms:ReEncrypt*",
           "kms:GenerateDataKey*",
-          "kms:DescribeKey",
-          "kms:Update*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       },
-
-      # SQS service principal (for DLQ SSE)
       {
-        Sid       = "AllowSqsUse"
-        Effect    = "Allow"
-        Principal = { Service = "sqs.amazonaws.com" }
+        Sid    = "AllowSqsUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "sqs.amazonaws.com"
+        }
         Action = [
           "kms:GenerateDataKey*",
           "kms:Decrypt",
           "kms:Encrypt",
-          "kms:DescribeKey",
-          "kms:Update*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       },
-
-      # (Optional but often helpful) Allow Lambda to use the key when you set kms_key_arn on the function
       {
-        Sid       = "AllowLambdaUse"
-        Effect    = "Allow"
-        Principal = { Service = "lambda.amazonaws.com" }
+        Sid    = "AllowLambdaUse"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
         Action = [
           "kms:Decrypt",
           "kms:Encrypt",
           "kms:GenerateDataKey*",
-          "kms:DescribeKey",
-          "kms:Update*",
+          "kms:DescribeKey"
         ]
         Resource = "*"
       }
@@ -131,13 +124,11 @@ resource "aws_kms_key" "cw_logs_cmk" {
   tags = local.tags
 }
 
-
 resource "aws_kms_alias" "cw_logs_alias" {
   name          = "alias/${var.environment}-cwlogs-slack-forwarder"
   target_key_id = aws_kms_key.cw_logs_cmk.key_id
 }
 
-# KMS Alias
 resource "aws_kms_alias" "sns_canary_alias" {
   name          = "alias/${var.environment}-sns-canary"
   target_key_id = aws_kms_key.sns_canary_cmk.key_id
@@ -146,7 +137,7 @@ resource "aws_kms_alias" "sns_canary_alias" {
 # SNS Topic (encrypted)
 resource "aws_sns_topic" "canary_alerts" {
   name              = "${var.environment}-canary-alerts"
-  kms_master_key_id = aws_kms_alias.sns_canary_alias.name
+  kms_master_key_id = aws_kms_key.sns_canary_cmk.arn
   tags              = local.tags
 }
 
@@ -162,10 +153,19 @@ data "aws_iam_policy_document" "canary_alerts_topic_policy" {
 
     actions   = ["SNS:Publish"]
     resources = [aws_sns_topic.canary_alerts.arn]
+
     condition {
       test     = "StringEquals"
-      variable = "AWS:SourceAccount"
+      variable = "aws:SourceAccount"
       values   = [data.aws_caller_identity.current.account_id]
+    }
+
+    condition {
+      test     = "ArnLike"
+      variable = "aws:SourceArn"
+      values = [
+        "arn:aws:cloudwatch:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:alarm:*"
+      ]
     }
   }
 }
@@ -187,6 +187,7 @@ resource "aws_iam_role" "slack_lambda_role" {
       Action    = "sts:AssumeRole"
     }]
   })
+
   tags = local.tags
 }
 
@@ -200,7 +201,6 @@ resource "aws_iam_role_policy_attachment" "slack_forwarder_vpc_access" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
-# Secrets Manager access 
 resource "aws_iam_role_policy" "slack_secret_policy" {
   count = var.slack_secret_arn != "" ? 1 : 0
 
@@ -221,10 +221,9 @@ resource "aws_iam_role_policy" "slack_secret_policy" {
 data "archive_file" "slack_zip" {
   type        = "zip"
   source_file = "${path.module}/lambda/slack_forwarder.py"
-  output_path = "${path.module}/build/slack_forwarder.zip"
+  output_path = "${path.module}/slack_forwarder.zip"
 }
 
-# Lambda function
 resource "aws_signer_signing_profile" "slack_forwarder" {
   name_prefix = local.signer_name_prefix
   platform_id = "AWSLambda-SHA384-ECDSA"
@@ -242,12 +241,14 @@ resource "aws_lambda_code_signing_config" "slack_forwarder" {
 
   tags = local.tags
 }
+
 resource "aws_sqs_queue" "slack_forwarder_dlq" {
   name                      = "${var.environment}-slack-forwarder-dlq"
-  message_retention_seconds = 1209600 # 14 days
+  message_retention_seconds = 1209600
   kms_master_key_id         = aws_kms_key.cw_logs_cmk.arn
   tags                      = local.tags
 }
+
 resource "aws_iam_role_policy" "slack_forwarder_dlq_send" {
   name = "${var.environment}-slack-forwarder-dlq-send"
   role = aws_iam_role.slack_lambda_role.name
@@ -272,7 +273,9 @@ resource "aws_cloudwatch_log_group" "slack_forwarder" {
 }
 
 resource "aws_lambda_function" "slack_forwarder" {
-  filename                       = data.archive_file.slack_zip.output_path
+  filename         = data.archive_file.slack_zip.output_path
+  source_code_hash = data.archive_file.slack_zip.output_base64sha256
+
   function_name                  = local.slack_forwarder_name
   handler                        = "slack_forwarder.lambda_handler"
   role                           = aws_iam_role.slack_lambda_role.arn
@@ -290,23 +293,24 @@ resource "aws_lambda_function" "slack_forwarder" {
       SLACK_WEBHOOK_URL = var.slack_webhook_url
     }
   }
+
   vpc_config {
     subnet_ids         = var.subnet_ids
     security_group_ids = var.security_group_ids
   }
 
-  source_code_hash = fileexists(data.archive_file.slack_zip.output_path) ? filebase64sha256(data.archive_file.slack_zip.output_path) : null
-  tags             = local.tags
+  tags = local.tags
 
   tracing_config {
     mode = "Active"
   }
+
   dead_letter_config {
     target_arn = aws_sqs_queue.slack_forwarder_dlq.arn
   }
 }
 
-# SNS → Lambda subscription
+# SNS -> Lambda subscription
 resource "aws_sns_topic_subscription" "lambda_sub" {
   topic_arn = aws_sns_topic.canary_alerts.arn
   protocol  = "lambda"

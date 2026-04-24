@@ -21,36 +21,45 @@ def _resolve_webhook_url() -> str | None:
     if webhook:
         parsed = urllib.parse.urlparse(webhook)
         if parsed.scheme == "https" and parsed.netloc:
+            logger.info("Using Slack webhook from SLACK_WEBHOOK_URL")
             return webhook
         logger.error("SLACK_WEBHOOK_URL is set but not a valid https URL")
         return None
 
     secret_arn = os.environ.get("SLACK_SECRET_ARN")
     if not secret_arn:
+        logger.error("Neither SLACK_WEBHOOK_URL nor SLACK_SECRET_ARN is set")
         return None
 
     try:
+        logger.info("Resolving Slack webhook from Secrets Manager")
         resp = SECRETSMANAGER_CLIENT.get_secret_value(SecretId=secret_arn)
         secret_str = resp.get("SecretString")
         if not secret_str:
             logger.error("SecretString is empty for SLACK_SECRET_ARN")
             return None
 
-        # Support either a raw webhook string or a JSON object containing it.
         secret_str = secret_str.strip()
         if secret_str.startswith("https://"):
+            logger.info("Using raw webhook URL from Secrets Manager secret")
             return secret_str
 
         parsed = json.loads(secret_str)
-        return parsed.get("SLACK_WEBHOOK_URL") or parsed.get("webhook_url")
+        webhook = parsed.get("SLACK_WEBHOOK_URL") or parsed.get("webhook_url")
+        if webhook:
+            logger.info("Using webhook URL from JSON secret")
+        else:
+            logger.error("Secret JSON did not contain SLACK_WEBHOOK_URL or webhook_url")
+        return webhook
     except Exception:
         logger.error("Failed to resolve Slack webhook from Secrets Manager")
         logger.error(traceback.format_exc())
         return None
 
-# Slack sender
+
 def send_slack(webhook: str, payload: dict):
     try:
+        logger.info("Sending Slack message")
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             webhook,
@@ -64,16 +73,17 @@ def send_slack(webhook: str, payload: dict):
             if status < 200 or status >= 300:
                 logger.error(f"Slack returned non-2xx: {status}")
                 return False
-            else:
-                logger.info("Slack alert sent successfully")
-                return True
+            logger.info("Slack alert sent successfully")
+            return True
     except urllib.error.HTTPError as e:
         response_body = e.read().decode("utf-8", errors="ignore")
         logger.error(f"Slack HTTP error: {e.code} {e.reason}; body={response_body}")
         return False
     except Exception:
+        logger.error("Unexpected error sending Slack message")
         logger.error(traceback.format_exc())
         return False
+
 
 def parse_event_context(record: dict) -> dict:
     context = {
@@ -91,6 +101,7 @@ def parse_event_context(record: dict) -> dict:
 
     raw_message = sns.get("Message")
     if not raw_message:
+        logger.warning("SNS record did not contain Message")
         return context
 
     try:
@@ -109,14 +120,15 @@ def parse_event_context(record: dict) -> dict:
                 break
 
     except Exception:
-        logger.debug("Failed to parse CloudWatch alarm JSON")
+        logger.warning("Failed to parse CloudWatch alarm JSON from SNS message")
+        logger.warning(traceback.format_exc())
 
     if not context["region"]:
         context["region"] = os.environ.get("AWS_REGION")
 
     return context
 
-# Formatting helpers
+
 ALERT_EMOJI = ":rotating_light:"
 SUCCESS_EMOJI = ":large_green_circle:"
 
@@ -134,6 +146,7 @@ def get_status_attributes(status_text: str):
     }
     return mapping.get(status_text.upper(), (":warning:", "CANARY ALERT"))
 
+
 def _fmt_ts(iso_ts: str):
     if not iso_ts:
         return "unknown"
@@ -144,7 +157,7 @@ def _fmt_ts(iso_ts: str):
     except Exception:
         return iso_ts
 
-# Slack message builder (CLEAN)
+
 def format_slack_message(ctx: dict) -> dict:
     status = (ctx.get("stateValue") or "ALARM").upper()
     alarm = ctx.get("alarmName") or "Unknown Alarm"
@@ -191,18 +204,32 @@ def format_slack_message(ctx: dict) -> dict:
         "blocks": blocks,
     }
 
-# Lambda entrypoint
+
 def lambda_handler(event, context):
     logger.info("Received CloudWatch Canary alarm event")
+    logger.info(f"Top-level event keys: {list(event.keys()) if isinstance(event, dict) else str(type(event))}")
+    logger.info(f"Event payload: {json.dumps(event)}")
 
     webhook = _resolve_webhook_url()
     if not webhook:
         logger.error("No Slack webhook configured. Set SLACK_WEBHOOK_URL or SLACK_SECRET_ARN.")
         raise RuntimeError("No Slack webhook configured")
 
+    records = event.get("Records", [])
+    logger.info(f"Record count: {len(records)}")
+
+    if not records:
+        logger.warning("No SNS records found in event payload")
+        return {"status": "no_records"}
+
     failed = 0
-    for record in event.get("Records", []):
+    for i, record in enumerate(records, start=1):
+        logger.info(f"Processing record {i}")
+        logger.info(f"Record payload: {json.dumps(record)}")
+
         ctx = parse_event_context(record)
+        logger.info(f"Parsed context: {json.dumps(ctx)}")
+
         msg = format_slack_message(ctx)
         ok = send_slack(webhook, msg)
         if not ok:
