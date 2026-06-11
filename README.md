@@ -79,3 +79,19 @@ module "vpc_connectivity_canary" {
   denied_ports      = ["22", "3306"]
 }
 ```
+
+## CI Artifact Packaging
+
+This module packages both runtime artifacts during Terraform execution:
+
+- Canary script archive (`connectivity_check.js.zip`)
+- Slack forwarder Lambda archive (`slack_forwarder.zip`)
+
+To keep CI runs reliable when `plan` and `apply` happen in different jobs or containers, the Terraform resources use inline content/S3-backed code paths instead of reading prebuilt local ZIP files at apply time.
+
+This avoids errors such as:
+
+- `open ./connectivity_check.js.zip: no such file or directory`
+- `open ./slack_forwarder.zip: no such file or directory`
+
+If you run locally, no manual ZIP build step is required.

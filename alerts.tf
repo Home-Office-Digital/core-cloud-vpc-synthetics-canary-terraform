@@ -224,6 +224,13 @@ data "archive_file" "slack_zip" {
   output_path = "${path.module}/slack_forwarder.zip"
 }
 
+resource "aws_s3_object" "slack_forwarder_package" {
+  bucket         = aws_s3_bucket.canary_bucket.bucket
+  key            = "slack_forwarder.zip"
+  content_base64 = filebase64(data.archive_file.slack_zip.output_path)
+  tags           = local.tags
+}
+
 resource "aws_signer_signing_profile" "slack_forwarder" {
   name_prefix = local.signer_name_prefix
   platform_id = "AWSLambda-SHA384-ECDSA"
@@ -273,8 +280,9 @@ resource "aws_cloudwatch_log_group" "slack_forwarder" {
 }
 
 resource "aws_lambda_function" "slack_forwarder" {
-  filename         = data.archive_file.slack_zip.output_path
   source_code_hash = data.archive_file.slack_zip.output_base64sha256
+  s3_bucket        = aws_s3_bucket.canary_bucket.bucket
+  s3_key           = aws_s3_object.slack_forwarder_package.key
 
   function_name                  = local.slack_forwarder_name
   handler                        = "slack_forwarder.lambda_handler"
