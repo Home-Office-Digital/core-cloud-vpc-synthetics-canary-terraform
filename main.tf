@@ -187,11 +187,16 @@ data "archive_file" "canary_zip" {
   output_path = abspath("${path.module}/connectivity_check.js.zip")
 }
 
+data "local_file" "canary_zip_content" {
+  filename   = data.archive_file.canary_zip.output_path
+  depends_on = [data.archive_file.canary_zip]
+}
+
 resource "aws_s3_object" "canary_script" {
-  bucket = aws_s3_bucket.canary_bucket.bucket
-  key    = "connectivity_check.js.zip"
-  source = data.archive_file.canary_zip.output_path
-  tags   = local.tags
+  bucket         = aws_s3_bucket.canary_bucket.bucket
+  key            = "connectivity_check.js.zip"
+  content_base64 = data.local_file.canary_zip_content.content_base64
+  tags           = local.tags
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {

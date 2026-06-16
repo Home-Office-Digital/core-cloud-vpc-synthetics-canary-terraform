@@ -224,11 +224,16 @@ data "archive_file" "slack_zip" {
   output_path = abspath("${path.module}/slack_forwarder.zip")
 }
 
+data "local_file" "slack_zip_content" {
+  filename   = data.archive_file.slack_zip.output_path
+  depends_on = [data.archive_file.slack_zip]
+}
+
 resource "aws_s3_object" "slack_forwarder_package" {
-  bucket = aws_s3_bucket.canary_bucket.bucket
-  key    = "slack_forwarder.zip"
-  source = data.archive_file.slack_zip.output_path
-  tags   = local.tags
+  bucket         = aws_s3_bucket.canary_bucket.bucket
+  key            = "slack_forwarder.zip"
+  content_base64 = data.local_file.slack_zip_content.content_base64
+  tags           = local.tags
 }
 
 resource "aws_signer_signing_profile" "slack_forwarder" {
