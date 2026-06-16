@@ -184,14 +184,14 @@ resource "aws_iam_role_policy" "canary_s3_access" {
 data "archive_file" "canary_zip" {
   type        = "zip"
   source_file = "${path.module}/connectivity_check.js"
-  output_path = "${path.module}/connectivity_check.js.zip"
+  output_path = abspath("${path.module}/connectivity_check.js.zip")
 }
 
 resource "aws_s3_object" "canary_script" {
-  bucket         = aws_s3_bucket.canary_bucket.bucket
-  key            = "connectivity_check.js.zip"
-  content_base64 = filebase64(data.archive_file.canary_zip.output_path)
-  tags           = local.tags
+  bucket = aws_s3_bucket.canary_bucket.bucket
+  key    = "connectivity_check.js.zip"
+  source = data.archive_file.canary_zip.output_path
+  tags   = local.tags
 }
 
 resource "aws_synthetics_canary" "vpc_connectivity" {
